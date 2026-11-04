@@ -13,7 +13,7 @@ WASM-Kernel (March 2026, in `../wasm-kernel/`) had a WebAssembly-text assembler 
 
 ## Is it right?
 
-**The assembler:** for the kernel modules plus eight syntax test cases, MicroWAT's output is **byte-identical to wabt's** (wabt is WebAssembly's reference toolkit). That includes the exact case that broke WASM-Kernel 1.0.
+**The assembler:** for the two kernel modules plus six syntax test cases, MicroWAT's output is **byte-identical to wabt's** (wabt is WebAssembly's reference toolkit). That includes the exact case that broke WASM-Kernel 1.0.
 ```
 node tests/vs-wabt.js     # needs `npm i wabt` (test-only; the library itself has no dependencies)
 → ALL BYTE-IDENTICAL TO WABT
