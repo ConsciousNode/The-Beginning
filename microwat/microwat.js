@@ -77,6 +77,7 @@
     ['i8x16.eq', S(0x23)], ['i32x4.eq', S(0x37)],
     ['i16x8.extend_low_i8x16_s', S(0x87)], ['i16x8.extend_high_i8x16_s', S(0x88)],
     ['i32x4.extend_low_i16x8_s', S(0xA7)], ['i32x4.extend_high_i16x8_s', S(0xA8)],
+    ['i32x4.ne', S(0x38)], ['i32x4.shl', S(0xAB)], ['i32x4.shr_s', S(0xAC)],
     ['i32x4.add', S(0xAE)], ['i32x4.sub', S(0xB1)], ['i32x4.mul', S(0xB5)],
     ['f32x4.abs', S(0xE0)], ['f32x4.neg', S(0xE1)], ['f32x4.sqrt', S(0xE3)],
     ['f32x4.add', S(0xE4)], ['f32x4.sub', S(0xE5)], ['f32x4.mul', S(0xE6)], ['f32x4.div', S(0xE7)],
