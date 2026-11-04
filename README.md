@@ -15,6 +15,7 @@ A lot of the studio's current work started here:
 |---|---|
 | **Chromatrack**, the step sequencer that started it all | [chromatrack](https://github.com/ConsciousNode/chromatrack), the music-app family (Synth Radio, Speaker Box Magnum, AuraLoom) |
 | **XINU** → **XINU-8** → **TRITON** → **WASM-Kernel** | the Xinu philosophy itself, and eventually [TabComp](https://github.com/ConsciousNode/TabComp), which runs DOOM |
+| **WASM-Kernel**'s assembler | [`microwat/`](microwat/): MicroWAT 2 and SIMD kernels for LEARNS-style ternary maths (Nov 2026) |
 | **HTMLNLM** (twenty-odd versions from six different models) | [HTMLNLM](https://github.com/ConsciousNode/HTMLNLM), the [Pip Suite](https://github.com/ConsciousNode/Pip-Suite), [LEARNS](https://github.com/ConsciousNode/LEARNS) |
 | **Junto** orchestrator + node | the Junto swarm idea, Pip's Room |
 | **Webster** (formant synthesis, then the 2-D waveguide mesh) | [Webster](https://github.com/ConsciousNode/Webster), [OmniVocal](https://github.com/ConsciousNode/OmniVocal) |
@@ -53,7 +54,18 @@ Needs the Tailwind CDN to look right (it was the one project before zero-depende
 ### `wasm-kernel/` · *unpublished*
 <img src="screens/wasm-kernel.jpg" width="420" align="right">
 
-**WASM-Kernel IDE**: a hand-written WAT-to-WebAssembly assembler in JavaScript, plus a little kernel (the "Inner Sanctum") with syscalls, cooperative multitasking and per-instruction cycle accounting. You write WebAssembly text and run it as a process. It doesn't boot as-is: the assembler emits a bad global index while building the kernel (see Run notes).
+**WASM-Kernel IDE**: a hand-written WAT-to-WebAssembly assembler in JavaScript, plus a little kernel (the "Inner Sanctum") with syscalls, cooperative multitasking and per-instruction cycle accounting. You write WebAssembly text and run it as a process. `WASMKernal1.html` is kept as found; it doesn't boot (see Run notes).
+
+**`WASMKernel-1.1.html` boots and runs.** It has five fixes, each marked `1.1 FIX` in the source:
+- operands were read by peeking at the last byte written, so the value 35 looked like `global.get`;
+- any `$name` inside a function body renamed the function (this one swallowed `global.get $cycle_budget` and caused the crash);
+- `free()` dropped a value that wasn't there;
+- `(memory (export "mem") 1 256)` wasn't parsed;
+- `i32.le_*` and `i32.gt_*` had each other's opcodes.
+
+The default program prints *"Hello from the Inner Sanctum!"* and returns 42; a loop test summing 1–100 returns 5050. One known gap is left as-is: the cycle budget is charged once per function call, not per instruction.
+
+**Its assembler has grown into [`microwat/`](microwat/)**, MicroWAT 2 + wasm-kernels: byte-identical to wabt, with SIMD, and ternary matrix × vector kernels that run about 6–20× faster than plain JS.
 <br clear="right">
 
 ### `htmlnlm/` · the language model in a tab
@@ -136,7 +148,7 @@ Every HTML file was opened headless in Chromium (Playwright), with network acces
 | `htmlnlm/versioning/HTMLNLM-KimiAgent-2` | `Invalid or unexpected token` |
 | `htmlnlm/versioning/HTMLNLM-Perp-1` | `Unexpected identifier '$'` |
 | `htmlnlm/versioning/HTMLNLM-Perp-2` | `this.updateParams is not a function` |
-| `wasm-kernel/WASMKernal1` | WebAssembly compile error: invalid global index 35 |
+| `wasm-kernel/WASMKernal1` | WebAssembly compile error: invalid global index 35 (fixed in `WASMKernel-1.1.html`) |
 | `webster/deeps_webster` | `missing ) after argument list` |
 | `webster/halfweb-2` | `Cannot read properties of undefined (reading 'currentTime')` |
 

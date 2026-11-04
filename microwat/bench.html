@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>wasm-kernels benchmark</title>
+<style>body{background:#0d0f12;color:#cfd8dc;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:24px}pre{white-space:pre-wrap}button{font:inherit;padding:6px 14px}</style></head>
+<body><h2>wasm-kernels · matrix × vector</h2>
+<p>JS vs scalar WebAssembly vs SIMD, assembled in this tab by MicroWAT. Speed-up is relative to plain JS.</p>
+<button id="go">Run</button><pre id="out"></pre>
+<script src="microwat.js"></script><script src="kernels.js"></script><script src="bench.js"></script>
+<script>
+const out = document.getElementById('out');
+document.getElementById('go').onclick = async () => { out.textContent = 'running…\n'; window.benchResult = await WasmBench.run(WasmKernels, s => out.textContent += s + '\n'); out.textContent += 'done'; };
+if (location.hash === '#auto') document.getElementById('go').click();
+</script></body></html>
