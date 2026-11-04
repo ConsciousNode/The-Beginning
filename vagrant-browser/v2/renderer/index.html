@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<!--
+  Vagrant Browser — ConsciousNode SoftWorks
+  MIT License
+  
+  Browser Chrome UI - The renderer process interface
+-->
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>Vagrant Browser</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-dark">
+  <!-- Custom Titlebar -->
+  <div id="titlebar" class="titlebar">
+    <div class="titlebar-drag-region"></div>
+    <div class="titlebar-content">
+      <div class="window-title">VAGRANT BROWSER</div>
+      <div class="system-stats">
+        <span id="cpuStat" class="stat" title="CPU">●</span>
+        <span id="memStat" class="stat" title="Memory">●</span>
+      </div>
+      <div class="window-controls">
+        <button id="minimizeBtn" class="window-btn minimize" title="Minimize">
+          <svg viewBox="0 0 12 12"><rect x="1" y="5.5" width="10" height="1"/></svg>
+        </button>
+        <button id="maximizeBtn" class="window-btn maximize" title="Maximize">
+          <svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+        </button>
+        <button id="closeBtn" class="window-btn close" title="Close">
+          <svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Strip -->
+  <div id="tabStrip" class="tab-strip">
+    <div class="tabs-container" id="tabsContainer">
+      <!-- Tabs will be dynamically added here -->
+    </div>
+    <button id="newTabBtn" class="new-tab-btn" title="New Tab (Ctrl+T)">+</button>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div id="navBar" class="nav-bar">
+    <div class="nav-buttons">
+      <button id="backBtn" class="nav-btn" title="Back (Alt+Left)">
+        <svg viewBox="0 0 16 16"><path d="M10 3L5 8l5 5"/></svg>
+      </button>
+      <button id="forwardBtn" class="nav-btn" title="Forward (Alt+Right)">
+        <svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></svg>
+      </button>
+      <button id="reloadBtn" class="nav-btn" title="Reload (Ctrl+R)">
+        <svg viewBox="0 0 16 16"><path d="M2 8a6 6 0 016-6v0l-2 2m2-2l2 2m-2-2v4h4M14 8a6 6 0 01-6 6v0l2-2m-2 2l-2-2m2 2v-4H4"/></svg>
+      </button>
+    </div>
+    <div class="address-bar-container">
+      <div class="security-indicator" id="securityIndicator">🔒</div>
+      <input type="text" id="addressBar" class="address-bar" placeholder="Enter file path or about: URL" autocomplete="off" spellcheck="false">
+      <div class="address-actions">
+        <button id="bookmarkBtn" class="action-btn" title="Bookmark (Ctrl+D)">☆</button>
+        <button id="menuBtn" class="action-btn" title="Menu">☰</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar" class="toolbar">
+    <div class="toolbar-group">
+      <button id="findBtn" class="tool-btn" title="Find in Page (Ctrl+F)">
+        <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor"/><path d="M11 11l4 4"/></svg>
+      </button>
+      <button id="zoomOutBtn" class="tool-btn" title="Zoom Out (Ctrl+-)">−</button>
+      <span id="zoomLevel" class="zoom-level">100%</span>
+      <button id="zoomInBtn" class="tool-btn" title="Zoom In (Ctrl++)">+</button>
+      <button id="readingModeBtn" class="tool-btn" title="Reading Mode">📖</button>
+      <button id="viewSourceBtn" class="tool-btn" title="View Source (Ctrl+U)">&lt;/&gt;</button>
+      <button id="savePageBtn" class="tool-btn" title="Save Page (Ctrl+S)">💾</button>
+    </div>
+    <div class="toolbar-group">
+      <button id="resourcePanelBtn" class="tool-btn" title="Resource Panel (Ctrl+Shift+M)">📊</button>
+    </div>
+  </div>
+
+  <!-- Find Bar (hidden by default) -->
+  <div id="findBar" class="find-bar hidden">
+    <input type="text" id="findInput" placeholder="Find in page...">
+    <span id="findResult" class="find-result"></span>
+    <button id="findPrevBtn" class="find-btn" title="Previous">↑</button>
+    <button id="findNextBtn" class="find-btn" title="Next">↓</button>
+    <button id="findCloseBtn" class="find-btn" title="Close (Esc)">×</button>
+    <label class="find-option">
+      <input type="checkbox" id="matchCase"> Match case
+    </label>
+  </div>
+
+  <!-- Content Area (BrowserViews will be positioned here by main process) -->
+  <div id="contentArea" class="content-area">
+    <!-- BrowserViews are managed by Electron main process -->
+  </div>
+
+  <!-- Status Bar -->
+  <div id="statusBar" class="status-bar">
+    <span id="statusText" class="status-text"></span>
+    <div class="status-right">
+      <span id="tabMemory" class="tab-memory"></span>
+      <span id="loadingIndicator" class="loading-indicator hidden">●</span>
+    </div>
+  </div>
+
+  <!-- Resource Panel (slide-in drawer) -->
+  <div id="resourcePanel" class="resource-panel">
+    <div class="resource-panel-header">
+      <h3>Resource Monitor</h3>
+      <button id="closeResourcePanel" class="close-btn">×</button>
+    </div>
+    <div class="resource-panel-content">
+      <!-- System Resources -->
+      <div class="resource-section">
+        <h4>System</h4>
+        <div class="resource-item">
+          <span>Total RAM</span>
+          <span id="sysTotalRam">-</span>
+        </div>
+        <div class="resource-item">
+          <span>Free RAM</span>
+          <span id="sysFreeRam">-</span>
+        </div>
+        <div class="resource-bar">
+          <div id="ramBar" class="resource-bar-fill" style="width: 0%"></div>
+        </div>
+        <div class="resource-item">
+          <span>CPU</span>
+          <span id="sysCpu">-</span>
+        </div>
+        <div class="resource-item small">
+          <span id="sysVersions">-</span>
+        </div>
+      </div>
+
+      <!-- Per-Tab Resources -->
+      <div class="resource-section">
+        <h4>Tabs</h4>
+        <div id="tabResourcesList" class="tab-resources-list">
+          <!-- Tab resources will be populated here -->
+        </div>
+      </div>
+
+      <!-- Global Controls -->
+      <div class="resource-section">
+        <h4>Global Controls</h4>
+        <div class="control-row">
+          <label>Default memory limit (MB)</label>
+          <input type="number" id="defaultMemoryLimit" value="512" min="64" max="4096">
+        </div>
+        <div class="control-row">
+          <label>Auto-suspend over limit</label>
+          <input type="checkbox" id="autoSuspendGlobal">
+        </div>
+        <div class="control-buttons">
+          <button id="suspendAllBtn" class="control-btn">Suspend All Background</button>
+          <button id="resumeAllBtn" class="control-btn">Resume All</button>
+          <button id="reloadAllBtn" class="control-btn warning">Reload All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bookmark Modal -->
+  <div id="bookmarkModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <h3>Add Bookmark</h3>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="bookmarkName" placeholder="Bookmark name">
+      </div>
+      <div class="form-group">
+        <label>URL</label>
+        <input type="text" id="bookmarkUrl" readonly>
+      </div>
+      <div class="form-group">
+        <label>Tags (comma-separated)</label>
+        <input type="text" id="bookmarkTags" placeholder="tag1, tag2, tag3">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="bookmarkNotes" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Size</label>
+        <span id="bookmarkSize">-</span>
+      </div>
+      <div id="bookmarkWarning" class="warning hidden"></div>
+      <div class="modal-actions">
+        <button id="cancelBookmark" class="btn secondary">Cancel</button>
+        <button id="saveBookmark" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu (hidden by default) -->
+  <div id="contextMenu" class="context-menu hidden">
+    <div class="menu-item" data-action="close">Close Tab</div>
+    <div class="menu-item" data-action="closeOthers">Close Other Tabs</div>
+    <div class="menu-item" data-action="closeRight">Close Tabs to Right</div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="duplicate">Duplicate Tab</div>
+    <div class="menu-item" data-action="pin">Pin Tab</div>
+    <div class="menu-item" data-action="suspend">Suspend Tab</div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="reload">Reload</div>
+  </div>
+
+  <!-- Main Menu (hidden by default) -->
+  <div id="mainMenu" class="main-menu hidden">
+    <div class="menu-item" data-action="newTab">New Tab <span class="shortcut">Ctrl+T</span></div>
+    <div class="menu-item" data-action="newWindow">New Window</div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="bookmarks">Bookmarks <span class="shortcut">Ctrl+Shift+O</span></div>
+    <div class="menu-item" data-action="history">History <span class="shortcut">Ctrl+H</span></div>
+    <div class="menu-item" data-action="downloads">Downloads</div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="zoomIn">Zoom In <span class="shortcut">Ctrl++</span></div>
+    <div class="menu-item" data-action="zoomOut">Zoom Out <span class="shortcut">Ctrl+-</span></div>
+    <div class="menu-item" data-action="resetZoom">Reset Zoom <span class="shortcut">Ctrl+0</span></div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="settings">Settings <span class="shortcut">Ctrl+,</span></div>
+    <div class="menu-item" data-action="help">Help</div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" data-action="exit">Exit</div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

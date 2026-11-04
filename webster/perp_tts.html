@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PhonForge</title>
+<style>
+body { margin:0; background:#0d0d12; color:#eee; font-family:sans-serif; }
+header { padding:10px; background:#151520; display:flex; gap:10px; }
+textarea { width:100%; height:150px; background:#111; color:#fff; border:none; padding:10px; }
+button,input { background:#222; color:#fff; border:none; padding:6px; }
+canvas { width:100%; height:100px; background:#000; }
+</style>
+</head>
+<body>
+
+<header>
+Pitch <input type="range" id="pitch" min="80" max="220" value="120">
+Rate <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+<button onclick="play()">Play</button>
+<button onclick="stop()">Stop</button>
+</header>
+
+<textarea id="text">hello world this actually starts to sound like speech</textarea>
+<canvas id="viz"></canvas>
+
+<script>
+const ctx = new (window.AudioContext||window.webkitAudioContext)();
+
+// MASTER
+const master = ctx.createGain();
+master.gain.value = 0.8;
+master.connect(ctx.destination);
+
+// ANALYZER
+const analyser = ctx.createAnalyser();
+master.connect(analyser);
+
+// SOURCE
+let osc, noise, mixGain;
+
+// FORMANTS
+let f1 = ctx.createBiquadFilter();
+let f2 = ctx.createBiquadFilter();
+let f3 = ctx.createBiquadFilter();
+
+[f1,f2,f3].forEach(f=>{
+  f.type="bandpass";
+  f.Q.value=10;
+});
+
+// NOISE
+function createNoise(){
+  const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  return src;
+}
+
+// VOWELS
+const V = {
+"a":[800,1200,2500],
+"e":[600,2000,2800],
+"i":[300,2600,3200],
+"o":[500,900,2500],
+"u":[300,800,2300],
+"ə":[500,1500,2500]
+};
+
+// G2P (better)
+function g2p(text){
+  return text.toLowerCase()
+    .replace(/tion/g,"ʃə")
+    .replace(/sh/g,"ʃ")
+    .replace(/th/g,"θ")
+    .replace(/ch/g,"tʃ")
+    .replace(/ng/g,"ŋ")
+    .replace(/oo/g,"u")
+    .replace(/ee/g,"i")
+    .replace(/a/g,"a")
+    .replace(/e/g,"e")
+    .replace(/i/g,"i")
+    .replace(/o/g,"o")
+    .replace(/u/g,"u")
+    .replace(/[^a-zʃθŋ ]/g," ")
+    .split("");
+}
+
+// INIT VOICE
+function init(pitch){
+  osc = ctx.createOscillator();
+  osc.type="sawtooth";
+  osc.frequency.value=pitch;
+
+  noise = createNoise();
+
+  mixGain = ctx.createGain();
+
+  osc.connect(f1);
+  f1.connect(f2);
+  f2.connect(f3);
+  f3.connect(mixGain);
+
+  noise.connect(mixGain);
+
+  mixGain.connect(master);
+
+  osc.start();
+  noise.start();
+}
+
+// COARTICULATION
+function setFormants(target, t){
+  f1.frequency.exponentialRampToValueAtTime(target[0], t);
+  f2.frequency.exponentialRampToValueAtTime(target[1], t);
+  f3.frequency.exponentialRampToValueAtTime(target[2], t);
+}
+
+// PLAY
+function play(){
+  ctx.resume();
+
+  const text = document.getElementById("text").value;
+  const pitchBase = +document.getElementById("pitch").value;
+  const rate = +document.getElementById("rate").value;
+
+  const phonemes = g2p(text);
+
+  init(pitchBase);
+
+  let t = ctx.currentTime + 0.1;
+
+  phonemes.forEach((p,i)=>{
+    let dur = 0.1 / rate;
+
+    // PROSODY (simple pitch curve)
+    let pitch = pitchBase + Math.sin(i/5)*10;
+    osc.frequency.linearRampToValueAtTime(pitch, t);
+
+    if (V[p]) {
+      setFormants(V[p], t);
+      mixGain.gain.linearRampToValueAtTime(0.4, t);
+    }
+
+    // FRICATIVES
+    else if ("sʃθf".includes(p)) {
+      mixGain.gain.linearRampToValueAtTime(0.6, t);
+    }
+
+    // PLOSIVES
+    else if ("ptkbdg".includes(p)) {
+      mixGain.gain.linearRampToValueAtTime(0.0, t);
+      mixGain.gain.linearRampToValueAtTime(0.6, t+0.02);
+    }
+
+    // NASALS
+    else if ("mnŋ".includes(p)) {
+      setFormants([300,1000,2000], t);
+    }
+
+    t += dur;
+  });
+}
+
+// STOP
+function stop(){
+  ctx.close();
+  location.reload();
+}
+
+// VISUALIZER
+(function(){
+  const canvas = document.getElementById("viz");
+  const c = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = 100;
+
+  const data = new Uint8Array(analyser.fftSize);
+
+  function draw(){
+    requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(data);
+
+    c.fillStyle="#000";
+    c.fillRect(0,0,canvas.width,canvas.height);
+
+    c.strokeStyle="#0f0";
+    c.beginPath();
+
+    for(let i=0;i<data.length;i++){
+      let x=i/data.length*canvas.width;
+      let y=data[i]/255*canvas.height;
+      c.lineTo(x,y);
+    }
+
+    c.stroke();
+  }
+  draw();
+})();
+</script>
+
+</body>
+</html>

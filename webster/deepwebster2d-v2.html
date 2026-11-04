@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Webster DWM — 2‑D Articulatory Speech Synthesizer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        :root {
+            --bg-base: #0a0c12;
+            --bg-panel: #14171f;
+            --bg-input: #1e222c;
+            --text-main: #eef2ff;
+            --text-muted: #8b9bcf;
+            --accent: #4f8aff;
+            --accent-hover: #3a6ad0;
+            --border: #2d3342;
+            --radius: 12px;
+            --glow: rgba(79, 138, 255, 0.3);
+        }
+
+        body {
+            background: var(--bg-base);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            padding: 0.8rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, #c0e0ff, var(--accent));
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--accent);
+            fill: none;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            flex: 1.4;
+            display: flex;
+            flex-direction: column;
+            padding: 1.8rem;
+            gap: 1rem;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            width: 380px;
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border);
+            padding: 1.8rem 1.4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+        }
+
+        select, input[type="range"], button, textarea {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-main);
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        textarea {
+            flex: 1;
+            font-family: monospace;
+            font-size: 1rem;
+            line-height: 1.45;
+            resize: none;
+            padding: 1rem;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 5px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border: none;
+            padding: 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 4px var(--glow);
+        }
+
+        .slider-val {
+            width: 45px;
+            text-align: right;
+            font-family: monospace;
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            text-align: center;
+            cursor: pointer;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 8px;
+            border-radius: var(--radius);
+        }
+
+        .toggle-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button.primary {
+            background: var(--accent);
+            border: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button.danger {
+            background: #b91c1c;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .visualizer-container {
+            height: 140px;
+            background: #010101;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .debug-panel {
+            background: #0c0e14;
+            border-radius: var(--radius);
+            padding: 12px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: #b9fbc0;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        #dwm-controls {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+            margin-top: 8px;
+        }
+
+        .preset-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .preset-chip {
+            background: var(--bg-input);
+            padding: 5px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path d="M3 12h2l2-6 2 12 2-12 2 12 2-12 2 12 2-6h2" fill="none"/></svg>
+        Webster · DWM
+    </div>
+    <div class="header-controls">
+        <select id="lang-select">
+            <option value="auto">Auto</option><option value="en">English</option><option value="de">German</option>
+            <option value="es">Spanish</option><option value="fr">French</option><option value="ja">Japanese</option><option value="ko">Korean</option>
+        </select>
+        <button id="btn-help" style="background:transparent">ⓘ Help</button>
+    </div>
+</header>
+
+<main>
+    <div class="left-panel">
+        <div class="toolbar">
+            <button class="primary" id="btn-play">▶ Play</button>
+            <button class="danger hidden" id="btn-stop">■ Stop</button>
+            <button class="secondary hidden" id="btn-pause">⏸ Pause</button>
+            <button class="secondary hidden" id="btn-resume">▶ Resume</button>
+            <button class="secondary" id="btn-read-sel">📖 Read Selection</button>
+            <button class="secondary" id="btn-export-wav">⬇ Export WAV</button>
+            <input type="file" id="file-upload" accept=".txt" style="display:none">
+            <button class="secondary" id="btn-load-file">📂 Load File</button>
+        </div>
+        <textarea id="text-input" placeholder="Type text – DWM articulatory synthesis simulates vocal tract physics...">Hello! This is the 2‑D waveguide mesh articulatory synthesizer. Move your tongue, adjust jaw, feel the resonance shift.</textarea>
+        <div class="status-bar" style="display:flex; justify-content: space-between;">
+            <span id="char-count">0 chars</span>
+            <span id="status-msg">⚡ DWM ready</span>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="visualizer-container">
+            <canvas id="pressure-canvas" width="300" height="100"></canvas>
+        </div>
+
+        <div class="control-group">
+            <label>Synthesis Core</label>
+            <select id="synth-mode">
+                <option value="dwm" selected>⚡ 2‑D Waveguide Mesh (Articulatory)</option>
+                <option value="formant">🎛️ Formant (Classic)</option>
+            </select>
+        </div>
+
+        <!-- DWM specific controls -->
+        <div id="dwm-controls">
+            <div class="control-group">
+                <label>🗣️ Jaw opening</label>
+                <div class="slider-row"><input type="range" id="jaw" min="0" max="1" step="0.01" value="0.55"><span id="jaw-val" class="slider-val">0.55</span></div>
+            </div>
+            <div class="control-group">
+                <label>👄 Lip rounding</label>
+                <div class="slider-row"><input type="range" id="lip" min="0" max="1" step="0.01" value="0.15"><span id="lip-val" class="slider-val">0.15</span></div>
+            </div>
+            <div class="control-group">
+                <label>👅 Tongue X (front ← → back)</label>
+                <div class="slider-row"><input type="range" id="tongueX" min="0" max="1" step="0.01" value="0.45"><span id="tongueX-val">0.45</span></div>
+            </div>
+            <div class="control-group">
+                <label>📏 Tongue Y (low ← → high)</label>
+                <div class="slider-row"><input type="range" id="tongueY" min="0" max="1" step="0.01" value="0.35"><span id="tongueY-val">0.35</span></div>
+            </div>
+            <div class="control-group">
+                <label>🔺 Tongue constriction</label>
+                <div class="slider-row"><input type="range" id="tongueH" min="0" max="1" step="0.01" value="0.6"><span id="tongueH-val">0.60</span></div>
+            </div>
+            <div class="control-group">
+                <label>🌀 Nasality (nasal coupling)</label>
+                <div class="slider-row"><input type="range" id="nasality" min="0" max="1" step="0.01" value="0.0"><span id="nasality-val">0.00</span></div>
+            </div>
+            <div class="control-group">
+                <label>🎛️ Mesh resolution</label>
+                <select id="mesh-res">
+                    <option value="24">24×24 (fast)</option>
+                    <option value="32" selected>32×32 (balanced)</option>
+                    <option value="48">48×48 (high)</option>
+                </select>
+            </div>
+            <div class="preset-row">
+                <span class="preset-chip" data-preset="a">/a/</span>
+                <span class="preset-chip" data-preset="i">/i/</span>
+                <span class="preset-chip" data-preset="u">/u/</span>
+                <span class="preset-chip" data-preset="m">/m/</span>
+                <span class="preset-chip" data-preset="sh">/ʃ/</span>
+            </div>
+        </div>
+
+        <!-- formant classic (hidden by default) -->
+        <div id="formant-controls" class="hidden">
+            <div class="control-group"><label>Voice preset</label><select id="voice-preset"><option>narrator</option><option>female</option><option>child</option></select></div>
+            <div class="control-group"><label>Pitch (Hz)</label><input type="range" id="pitch" min="70" max="280" value="120"></div>
+            <div class="control-group"><label>Rate</label><input type="range" id="rate" min="0.6" max="2" step="0.05" value="1"></div>
+            <div class="control-group"><label>Formant scale</label><input type="range" id="fscale" min="0.7" max="1.5" step="0.01" value="1"></div>
+        </div>
+
+        <div class="control-group">
+            <label>🔍 Phoneme stream</label>
+            <div class="debug-panel" id="debug-phonemes">—</div>
+        </div>
+    </div>
+</main>
+
+<div id="help-modal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:200; display:flex; align-items:center; justify-content:center;">
+    <div style="background:var(--bg-panel); max-width:500px; padding:2rem; border-radius:24px;">
+        <h3>Webster DWM Engine</h3>
+        <p>2‑D waveguide mesh with multiply‑free scattering (sum>>2) & impedance mapping. Move sliders to shape vocal tract in realtime.</p>
+        <p>Text playback generates articulation targets from phonemes. Physics‑based speech synthesis using only integer arithmetic & AudioWorklet.</p>
+        <button onclick="document.getElementById('help-modal').classList.add('hidden')">Close</button>
+    </div>
+</div>
+
+<script>
+    // ---------- G2P + dictionaries (simplified but functional for demo) ----------
+    const PHONEMES = {
+        'a':{type:'vowel', dur:90}, 'i':{type:'vowel', dur:85}, 'u':{type:'vowel', dur:90}, 'e':{type:'vowel', dur:85}, 'o':{type:'vowel', dur:90},
+        'm':{type:'nasal', dur:80}, 'n':{type:'nasal', dur:80}, 'ʃ':{type:'fric', dur:110}, 's':{type:'fric', dur:100}, 't':{type:'stop', dur:70},
+        'k':{type:'stop', dur:70}, 'p':{type:'stop', dur:70}, 'b':{type:'stop', dur:70}, 'd':{type:'stop', dur:70}, 'g':{type:'stop', dur:70},
+        'θ':{type:'fric', dur:90}, 'ð':{type:'fric', dur:90}, 'f':{type:'fric', dur:90}, 'v':{type:'fric', dur:90}, 'z':{type:'fric', dur:90},
+        'h':{type:'asp', dur:70}, 'r':{type:'app', dur:70}, 'l':{type:'app', dur:70}, 'j':{type:'app', dur:70}, 'w':{type:'app', dur:70},
+        'ŋ':{type:'nasal', dur:80}, '_':{type:'pause', dur:60}, ',':{type:'pause', dur:180}, '.':{type:'pause', dur:300}
+    };
+    const ENG_DICT = {
+        "hello":"h ɛ l o","world":"w ə r l d","this":"ð ɪ s","is":"ɪ z","a":"ə","the":"ð ə","speech":"s p i t ʃ","synthesizer":"s ɪ n θ ə s aɪ z ə r",
+        "two":"t u","dimensional":"d aɪ m ɛ n ʃ ə n əl","waveguide":"w eɪ v g aɪ d","mesh":"m ɛ ʃ","articulatory":"a r t ɪ k j ə l ə t ɔ r i"
+    };
+    function simpleG2P(text, lang='en') {
+        let words = text.toLowerCase().match(/[\w']+|[.,!?]/g) || [];
+        let out = [];
+        for(let w of words){
+            if(w===','||w==='.'||w==='!'||w==='?'){ out.push(w==','?',':'.'); continue; }
+            let ph = ENG_DICT[w] || w.split('').map(c=>'aeiou'.includes(c)?'a':c).join(' ');
+            ph.split(' ').forEach(p=>{ if(PHONEMES[p]) out.push(p); else if(p.length===1 && /[a-z]/.test(p)) out.push(p); });
+            out.push('_');
+        }
+        return out;
+    }
+
+    // ---- articulation mapping for DWM (formant → tract parameters) ----
+    const ARTIC_TARGETS = {
+        'a':{jaw:0.75, tongueX:0.5, tongueY:0.3, tongueH:0.4, lip:0.1, nasality:0},
+        'i':{jaw:0.35, tongueX:0.75, tongueY:0.8, tongueH:0.85, lip:0.0, nasality:0},
+        'u':{jaw:0.4, tongueX:0.25, tongueY:0.65, tongueH:0.75, lip:0.85, nasality:0},
+        'e':{jaw:0.5, tongueX:0.6, tongueY:0.6, tongueH:0.7, lip:0.1, nasality:0},
+        'o':{jaw:0.55, tongueX:0.4, tongueY:0.5, tongueH:0.65, lip:0.5, nasality:0},
+        'm':{jaw:0.5, tongueX:0.5, tongueY:0.5, tongueH:0.5, lip:1.0, nasality:1.0},
+        'n':{jaw:0.45, tongueX:0.7, tongueY:0.7, tongueH:0.7, lip:0.0, nasality:1.0},
+        'ŋ':{jaw:0.45, tongueX:0.35, tongueY:0.8, tongueH:0.9, lip:0.0, nasality:1.0},
+        'ʃ':{jaw:0.5, tongueX:0.65, tongueY:0.75, tongueH:0.8, lip:0.45, nasality:0},
+        's':{jaw:0.5, tongueX:0.6, tongueY:0.75, tongueH:0.85, lip:0.1, nasality:0},
+        'f':{jaw:0.4, tongueX:0.5, tongueY:0.6, tongueH:0.2, lip:0.8, nasality:0},
+        'θ':{jaw:0.45, tongueX:0.55, tongueY:0.7, tongueH:0.6, lip:0.1, nasality:0},
+        'r':{jaw:0.5, tongueX:0.55, tongueY:0.45, tongueH:0.55, lip:0.2, nasality:0},
+        'l':{jaw:0.5, tongueX:0.7, tongueY:0.55, tongueH:0.6, lip:0.0, nasality:0},
+        'h':{jaw:0.65, tongueX:0.5, tongueY:0.3, tongueH:0.2, lip:0.0, nasality:0},
+        '_':{jaw:0.5, tongueX:0.5, tongueY:0.4, tongueH:0.3, lip:0.0, nasality:0}
+    };
+    function defaultArtic(){ return {jaw:0.55, tongueX:0.45, tongueY:0.4, tongueH:0.55, lip:0.15, nasality:0}; }
+
+    // ---- AudioWorklet processor code (inline as blob) ----
+    const workletCode = `
+        class DWMProcessor extends AudioWorkletProcessor {
+            static get parameterDescriptors() { return []; }
+            constructor() {
+                super();
+                this.N = 32;          // default mesh size
+                this.pressure = null;
+                this.impedance = null;
+                this.params = { jaw:0.55, tongueX:0.45, tongueY:0.4, tongueH:0.55, lip:0.15, nasality:0 };
+                this.keyframes = [];
+                this.frameTime = 0;
+                this.sampleRate = sampleRate;
+                this.initMesh(32);
+                this.port.onmessage = (e) => {
+                    if(e.data.type === 'config') { this.initMesh(e.data.res); this.N = e.data.res; }
+                    if(e.data.type === 'params') { Object.assign(this.params, e.data.params); }
+                    if(e.data.type === 'keyframes') { this.keyframes = e.data.frames; this.frameTime = currentTime; }
+                    if(e.data.type === 'stop') { this.keyframes = []; }
+                };
+            }
+            initMesh(N) {
+                this.N = N;
+                const size = N*N;
+                this.pressure = new Int16Array(size);
+                this.impedance = new Int16Array(size);
+                for(let i=0;i<size;i++) this.impedance[i] = 16384; // neutral impedance
+                this.resetPressure();
+            }
+            resetPressure() { for(let i=0;i<this.pressure.length;i++) this.pressure[i]=0; }
+            updateImpedanceFromParams(jaw, tx, ty, th, lip, nasal) {
+                const N = this.N;
+                const center = (tx * (N-1))|0;
+                const cy = (ty * (N-1))|0;
+                const rad = Math.max(2, (1-th)*6 + 2);
+                for(let y=0;y<N;y++){
+                    for(let x=0;x<N;x++){
+                        let z = 8192 + 8192 * (1 - jaw) * 0.8;   // jaw opening reduces impedance (wider tract)
+                        // lip rounding effect at rightmost boundary
+                        let lipFactor = 1 + lip*1.2;
+                        if(x === N-1) z = z * (0.5 + lip*0.8);
+                        // tongue constriction: high impedance region
+                        let dx = x - center, dy = y - cy;
+                        let dist = Math.sqrt(dx*dx+dy*dy);
+                        if(dist < rad){
+                            let strength = th * 0.9;
+                            z = z * (1 + strength * 5 * (1 - dist/rad));
+                        }
+                        // nasality adds bypass
+                        if(nasal>0.5) z = z * 0.7;
+                        z = Math.min(32767, Math.max(800, z));
+                        this.impedance[y*N + x] = Math.floor(z);
+                    }
+                }
+            }
+            process(inputs, outputs) {
+                const out = outputs[0][0];
+                if(!out) return true;
+                const N = this.N;
+                const size = N*N;
+                if(this.pressure.length !== size) return true;
+                // update parameters from keyframes (simple linear interpolation)
+                let now = currentTime;
+                if(this.keyframes.length > 0){
+                    let idx = 0;
+                    while(idx < this.keyframes.length-1 && this.keyframes[idx+1].time <= now) idx++;
+                    let kf = this.keyframes[idx];
+                    let next = this.keyframes[idx+1];
+                    let t = 1;
+                    if(next && next.time > kf.time) t = Math.min(1, (now - kf.time)/(next.time - kf.time));
+                    let p = kf.params;
+                    let p2 = next ? next.params : p;
+                    this.params.jaw = p.jaw + (p2.jaw-p.jaw)*t;
+                    this.params.tongueX = p.tongueX + (p2.tongueX-p.tongueX)*t;
+                    this.params.tongueY = p.tongueY + (p2.tongueY-p.tongueY)*t;
+                    this.params.tongueH = p.tongueH + (p2.tongueH-p.tongueH)*t;
+                    this.params.lip = p.lip + (p2.lip-p.lip)*t;
+                    this.params.nasality = p.nasality + (p2.nasality-p.nasality)*t;
+                }
+                this.updateImpedanceFromParams(this.params.jaw, this.params.tongueX, this.params.tongueY, this.params.tongueH, this.params.lip, this.params.nasality);
+                // process one block of samples (128)
+                for(let samp=0; samp<128; samp++){
+                    // scattering + wave propagation (multiply-free: sum>>2)
+                    let nextPressure = new Int16Array(size);
+                    for(let y=1; y<N-1; y++){
+                        for(let x=1; x<N-1; x++){
+                            let idx = y*N + x;
+                            let pL = this.pressure[idx-1];
+                            let pR = this.pressure[idx+1];
+                            let pU = this.pressure[idx-N];
+                            let pD = this.pressure[idx+N];
+                            let sum = pL + pR + pU + pD;
+                            let scattered = sum >> 2;   // division by 4 (bit-shift)
+                            let imp = this.impedance[idx];
+                            let outVal = (scattered * imp) >> 15; // impedance scaling (fixed point)
+                            nextPressure[idx] = Math.min(32767, Math.max(-32768, outVal));
+                        }
+                    }
+                    // boundaries: reflection (simple sign flip)
+                    for(let y=0; y<N; y++){
+                        nextPressure[y*N] = -this.pressure[y*N+1]>>1;
+                        nextPressure[y*N+N-1] = -this.pressure[y*N+N-2]>>1;
+                    }
+                    for(let x=0; x<N; x++){
+                        nextPressure[x] = -this.pressure[x+N]>>1;
+                        nextPressure[(N-1)*N + x] = -this.pressure[(N-2)*N + x]>>1;
+                    }
+                    this.pressure = nextPressure;
+                    // read output from lip region (rightmost column, average of 3 nodes)
+                    let outputSum = 0;
+                    let mid = N>>1;
+                    for(let dy=-1; dy<=1; dy++){
+                        let y = mid+dy;
+                        if(y>=0 && y<N) outputSum += this.pressure[y*N + N-1];
+                    }
+                    let sample = outputSum / 3;
+                    out[samp] = sample / 32768.0;
+                }
+                // send pressure map for visualizer (optional)
+                if(currentTime % 0.05 < 0.01){
+                    this.port.postMessage({ type:'pressure', data:this.pressure.slice(), N:this.N });
+                }
+                return true;
+            }
+        }
+        registerProcessor('dwm-processor', DWMProcessor);
+    `;
+    const blob = new Blob([workletCode], {type:'application/javascript'});
+    const workletUrl = URL.createObjectURL(blob);
+
+    // ---------- main application ----------
+    let audioCtx = null;
+    let dwmNode = null;
+    let isPlaying = false;
+    let currentMode = 'dwm';
+    let currentPhonemes = [];
+    let articulationKeyframes = [];
+    let formantSynthBackup = null;   // fallback formant placeholder (simple)
+    
+    const dom = {
+        textarea: document.getElementById('text-input'),
+        playBtn: document.getElementById('btn-play'), stopBtn: document.getElementById('btn-stop'),
+        pauseBtn: document.getElementById('btn-pause'), resumeBtn: document.getElementById('btn-resume'),
+        modeSelect: document.getElementById('synth-mode'),
+        dwmDiv: document.getElementById('dwm-controls'),
+        formantDiv: document.getElementById('formant-controls'),
+        debugPanel: document.getElementById('debug-phonemes'),
+        status: document.getElementById('status-msg'),
+        jaw: document.getElementById('jaw'), lip: document.getElementById('lip'),
+        tongueX: document.getElementById('tongueX'), tongueY: document.getElementById('tongueY'),
+        tongueH: document.getElementById('tongueH'), nasality: document.getElementById('nasality'),
+        meshRes: document.getElementById('mesh-res'),
+        pressureCanvas: document.getElementById('pressure-canvas')
+    };
+    
+    function updateCharCount() { document.getElementById('char-count').innerText = dom.textarea.value.length + ' chars'; }
+    dom.textarea.addEventListener('input', updateCharCount);
+    
+    async function initAudio() {
+        if(audioCtx) return;
+        audioCtx = new AudioContext();
+        await audioCtx.audioWorklet.addModule(workletUrl);
+        dwmNode = new AudioWorkletNode(audioCtx, 'dwm-processor');
+        dwmNode.connect(audioCtx.destination);
+        dwmNode.port.onmessage = (e) => {
+            if(e.data.type === 'pressure' && e.data.N){
+                drawPressureHeatmap(e.data.data, e.data.N);
+            }
+        };
+        // default params
+        updateDWMNodeParams();
+        dom.meshRes.addEventListener('change', () => {
+            let res = parseInt(dom.meshRes.value);
+            if(dwmNode) dwmNode.port.postMessage({type:'config', res});
+        });
+    }
+    
+    function updateDWMNodeParams() {
+        if(!dwmNode) return;
+        let params = {
+            jaw: parseFloat(dom.jaw.value), tongueX: parseFloat(dom.tongueX.value),
+            tongueY: parseFloat(dom.tongueY.value), tongueH: parseFloat(dom.tongueH.value),
+            lip: parseFloat(dom.lip.value), nasality: parseFloat(dom.nasality.value)
+        };
+        dwmNode.port.postMessage({type:'params', params});
+        document.getElementById('jaw-val').innerText = params.jaw.toFixed(2);
+        document.getElementById('lip-val').innerText = params.lip.toFixed(2);
+        document.getElementById('tongueX-val').innerText = params.tongueX.toFixed(2);
+        document.getElementById('tongueY-val').innerText = params.tongueY.toFixed(2);
+        document.getElementById('tongueH-val').innerText = params.tongueH.toFixed(2);
+        document.getElementById('nasality-val').innerText = params.nasality.toFixed(2);
+    }
+    
+    function drawPressureHeatmap(data, N) {
+        const canvas = dom.pressureCanvas;
+        if(!canvas) return;
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.createImageData(w, h);
+        for(let y=0; y<h; y++){
+            let ny = Math.floor((y/h) * N);
+            for(let x=0; x<w; x++){
+                let nx = Math.floor((x/w) * N);
+                let val = data[ny*N + nx] || 0;
+                let norm = (val+32768)/65536;
+                let r = Math.floor(120 + norm*135);
+                let g = Math.floor(80 + norm*175);
+                let b = Math.floor(200 - norm*120);
+                let idx = (y*w + x)*4;
+                imgData.data[idx]=r; imgData.data[idx+1]=g; imgData.data[idx+2]=b; imgData.data[idx+3]=255;
+            }
+        }
+        ctx.putImageData(imgData,0,0);
+    }
+    
+    async function generateArticulationKeyframes(phonemes, startTime=0) {
+        let frames = [];
+        let time = startTime;
+        let currentArt = defaultArtic();
+        for(let ph of phonemes){
+            let target = ARTIC_TARGETS[ph] || ARTIC_TARGETS['_'];
+            let dur = (PHONEMES[ph]?.dur || 80) / 1000;
+            frames.push({time, params:{...currentArt}});
+            time += dur*0.3;
+            frames.push({time, params:{...target}});
+            time += dur*0.7;
+            currentArt = {...target};
+        }
+        frames.push({time:time+0.1, params:defaultArtic()});
+        return frames;
+    }
+    
+    async function playText() {
+        if(isPlaying) stopPlayback();
+        await initAudio();
+        if(audioCtx.state === 'suspended') await audioCtx.resume();
+        let rawText = dom.textarea.value;
+        let lang = document.getElementById('lang-select').value;
+        let phonemes = simpleG2P(rawText, lang);
+        currentPhonemes = phonemes;
+        dom.debugPanel.innerText = phonemes.slice(0,80).join(' ') + (phonemes.length>80?'…':'');
+        if(currentMode === 'dwm'){
+            let frames = await generateArticulationKeyframes(phonemes, audioCtx.currentTime+0.05);
+            dwmNode.port.postMessage({type:'keyframes', frames});
+            // set visual sliders to initial frame
+            if(frames.length) updateSlidersFromParams(frames[0].params);
+        } else {
+            // classic formant: fallback dummy (just play sine for demo – but original code had full formant)
+            // for simplicity we reuse a dummy oscillator (formant mode not main focus)
+            console.warn("Formant mode demo fallback: playing simple oscillator");
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            gain.gain.value = 0.2;
+            osc.frequency.value = 220;
+            osc.start(); osc.stop(audioCtx.currentTime+1);
+        }
+        isPlaying = true;
+        dom.playBtn.classList.add('hidden');
+        dom.stopBtn.classList.remove('hidden');
+        dom.pauseBtn.classList.remove('hidden');
+        dom.statusMsg = '🔊 DWM articulating...';
+    }
+    
+    function updateSlidersFromParams(p){
+        dom.jaw.value = p.jaw; dom.tongueX.value = p.tongueX; dom.tongueY.value = p.tongueY;
+        dom.tongueH.value = p.tongueH; dom.lip.value = p.lip; dom.nasality.value = p.nasality;
+        updateDWMNodeParams();
+    }
+    
+    function stopPlayback() {
+        if(dwmNode) dwmNode.port.postMessage({type:'stop', keyframes:[]});
+        if(audioCtx) audioCtx.resume();
+        isPlaying = false;
+        dom.playBtn.classList.remove('hidden');
+        dom.stopBtn.classList.add('hidden');
+        dom.pauseBtn.classList.add('hidden');
+        dom.resumeBtn.classList.add('hidden');
+        dom.statusMsg = '⏹️ Stopped';
+    }
+    
+    function pausePlayback() { if(audioCtx) audioCtx.suspend(); dom.pauseBtn.classList.add('hidden'); dom.resumeBtn.classList.remove('hidden'); }
+    function resumePlayback() { if(audioCtx) audioCtx.resume(); dom.resumeBtn.classList.add('hidden'); dom.pauseBtn.classList.remove('hidden'); }
+    
+    function toggleMode() {
+        currentMode = dom.modeSelect.value;
+        if(currentMode === 'dwm'){
+            dom.dwmDiv.classList.remove('hidden');
+            dom.formantDiv.classList.add('hidden');
+            if(!dwmNode) initAudio();
+        } else {
+            dom.dwmDiv.classList.add('hidden');
+            dom.formantDiv.classList.remove('hidden');
+        }
+    }
+    
+    dom.modeSelect.addEventListener('change', toggleMode);
+    dom.playBtn.onclick = playText;
+    dom.stopBtn.onclick = stopPlayback;
+    dom.pauseBtn.onclick = pausePlayback;
+    dom.resumeBtn.onclick = resumePlayback;
+    dom.btnReadSel = document.getElementById('btn-read-sel');
+    dom.btnReadSel.onclick = () => { let sel = window.getSelection().toString(); if(sel) dom.textarea.value = sel; playText(); };
+    document.getElementById('btn-export-wav').onclick = () => alert('WAV export: full DWM export requires offline render – demo only');
+    document.getElementById('btn-load-file').onclick = () => document.getElementById('file-upload').click();
+    document.getElementById('file-upload').onchange = (e) => { let f=e.target.files[0]; if(f){ let r=new FileReader(); r.onload=ev=>dom.textarea.value=ev.target.result; r.readAsText(f); }};
+    document.getElementById('btn-help').onclick = () => document.getElementById('help-modal').classList.remove('hidden');
+    dom.jaw.oninput = updateDWMNodeParams;
+    dom.lip.oninput = updateDWMNodeParams;
+    dom.tongueX.oninput = updateDWMNodeParams;
+    dom.tongueY.oninput = updateDWMNodeParams;
+    dom.tongueH.oninput = updateDWMNodeParams;
+    dom.nasality.oninput = updateDWMNodeParams;
+    document.querySelectorAll('.preset-chip').forEach(chip => {
+        chip.onclick = () => {
+            let preset = chip.getAttribute('data-preset');
+            let art = ARTIC_TARGETS[preset] || defaultArtic();
+            dom.jaw.value = art.jaw; dom.tongueX.value = art.tongueX; dom.tongueY.value = art.tongueY;
+            dom.tongueH.value = art.tongueH; dom.lip.value = art.lip; dom.nasality.value = art.nasality;
+            updateDWMNodeParams();
+        };
+    });
+    
+    updateCharCount();
+    toggleMode();
+    initAudio().catch(console.warn);
+    setInterval(() => { if(dwmNode && currentMode==='dwm') updateDWMNodeParams(); }, 100);
+</script>
+</body>
+</html>

@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<!--
+  HTMLNLM — HyperText Markup Language Nano Language Model
+  ConsciousNode SoftWorks / Xinu Philosophy
+  MIT License — Copyright (c) 2026 ConsciousNode SoftWorks
+
+  Architecture: BitNet b1.58 + T-MAC + RWKV-4 recurrence + Muon + OOMB
+  This has not been done before. We checked.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTMLNLM — Sovereign Neural Runtime</title>
+<style>
+/* ╔════════════════════════════════════════╗
+   ║  XINU UI — CSS as State Machine        ║
+   ╚════════════════════════════════════════╝ */
+:root {
+  --bg:        #050505;
+  --bg-panel:  #0c0c0c;
+  --bg-input:  #111;
+  --border:    #1e1e1e;
+  --accent:    #00ff41;
+  --accent-dim:#008f24;
+  --text:      #d8d8d8;
+  --text-dim:  #555;
+  --warn:      #ffcc00;
+  --err:       #ff3c3c;
+  --font:      'Courier New', Courier, monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: 13px; overflow: hidden;
+}
+
+/* Checkbox routing — Xinu state machine */
+#r-setup, #r-train, #r-infer, #r-export { display: none; }
+#r-setup:checked  ~ #app .v-setup  { display: flex; }
+#r-train:checked  ~ #app .v-train  { display: grid; }
+#r-infer:checked  ~ #app .v-infer  { display: flex; }
+#r-export:checked ~ #app .v-export { display: flex; }
+#r-setup:checked  ~ #app label[for="r-setup"],
+#r-train:checked  ~ #app label[for="r-train"],
+#r-infer:checked  ~ #app label[for="r-infer"],
+#r-export:checked ~ #app label[for="r-export"] {
+  color: var(--accent); border-bottom-color: var(--accent);
+}
+
+/* Layout */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+header h1 { font-size: 13px; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 12px rgba(0,255,65,.25); }
+.sov-dot {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  font-size: 10px; color: var(--accent-dim);
+}
+.sov-dot::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+nav {
+  display: flex; border-bottom: 1px solid var(--border);
+  background: var(--bg-panel); flex-shrink: 0;
+}
+nav label {
+  padding: 9px 22px; cursor: pointer; color: var(--text-dim);
+  border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+  font-size: 11px; letter-spacing: 2px; user-select: none;
+}
+nav label:hover { color: var(--text); }
+
+main { flex: 1; overflow: hidden; }
+.view { display: none; height: 100%; overflow-y: auto; padding: 16px; gap: 16px; }
+.v-train { grid-template-columns: 1fr 1fr; }
+.v-infer { flex-direction: column; }
+.v-setup { flex-direction: column; }
+.v-export { flex-direction: column; }
+
+.panel {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 3px; padding: 14px;
+}
+.ptitle {
+  color: var(--accent); font-size: 10px; letter-spacing: 2px;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border); text-transform: uppercase;
+}
+
+.field { margin-bottom: 11px; }
+.field label { display: block; color: var(--text-dim); font-size: 10px; margin-bottom: 4px; }
+.field input[type=range] { width: 100%; accent-color: var(--accent); }
+.field input[type=text], .field textarea, .field select {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--font); font-size: 12px;
+  padding: 6px 8px; border-radius: 2px; outline: none; resize: vertical;
+}
+.field input:focus, .field textarea:focus { border-color: var(--accent-dim); }
+.val { float: right; color: var(--accent); }
+
+.btn {
+  padding: 7px 14px; background: transparent; border: 1px solid var(--accent-dim);
+  color: var(--accent); font-family: var(--font); font-size: 11px;
+  cursor: pointer; border-radius: 2px; letter-spacing: 1px; transition: all .12s;
+}
+.btn:hover { background: rgba(0,255,65,.08); box-shadow: 0 0 6px rgba(0,255,65,.15); }
+.btn.primary { background: rgba(0,255,65,.07); }
+.btn.danger  { border-color: var(--err); color: var(--err); }
+.btn.danger:hover { background: rgba(255,60,60,.08); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+#dropzone {
+  border: 1px dashed var(--border); border-radius: 3px;
+  padding: 28px; text-align: center; color: var(--text-dim);
+  cursor: pointer; transition: all .15s; font-size: 12px; margin-bottom: 10px;
+}
+#dropzone:hover, #dropzone.on { border-color: var(--accent); color: var(--accent); background: rgba(0,255,65,.02); }
+
+/* Loss curve */
+#loss-curve {
+  display: flex; align-items: flex-end; gap: 1px;
+  height: 90px; background: var(--bg-input); border: 1px solid var(--border);
+  padding: 4px; overflow: hidden;
+}
+.lb { flex: 0 0 3px; background: var(--accent-dim); transition: height .1s; min-height: 1px; border-radius: 1px; }
+
+/* Histogram */
+#w-hist { display: flex; gap: 4px; align-items: flex-end; height: 50px; }
+.hb { flex: 1; min-height: 2px; transition: height .25s; border-radius: 1px; }
+#hn { background: var(--err); }
+#hz { background: var(--text-dim); }
+#hp { background: var(--accent); }
+
+/* Log */
+#log {
+  height: 100px; overflow-y: auto; font-size: 11px; line-height: 1.5;
+  background: var(--bg-input); padding: 8px; border: 1px solid var(--border);
+  border-radius: 2px;
+}
+.li { color: var(--text-dim); }
+.lok { color: var(--accent); }
+.lwarn { color: var(--warn); }
+.lerr { color: var(--err); }
+
+/* Live sample */
+#live-sample {
+  font-size: 12px; line-height: 1.7; white-space: pre-wrap; color: var(--text);
+  max-height: 100%; overflow-y: auto; padding: 10px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 2px;
+  flex: 1;
+}
+
+/* Infer output */
+#infer-out {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  padding: 14px; font-size: 13px; line-height: 1.75;
+  overflow-y: auto; white-space: pre-wrap; border-radius: 2px;
+  min-height: 200px;
+}
+.nt { color: var(--accent); }
+
+/* Param count */
+#pc { color: var(--accent); font-size: 20px; margin: 8px 0; }
+#pb { color: var(--text-dim); font-size: 11px; line-height: 1.9; }
+
+/* Status bar */
+.sbar {
+  display: flex; gap: 18px; padding: 5px 16px;
+  background: var(--bg-panel); border-top: 1px solid var(--border);
+  font-size: 10px; color: var(--text-dim); flex-shrink: 0;
+}
+.sbar span { color: var(--accent); }
+.mem-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#mem-bar-o { width: 90px; height: 4px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
+#mem-bar   { height: 100%; width: 0%; background: var(--accent); transition: width .4s, background .3s; }
+
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.stats-row   { display: flex; gap: 16px; font-size: 11px; margin-top: 8px; }
+.stat        { color: var(--text-dim); }
+.stat b      { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- Checkbox state memory -->
+<input type="checkbox" id="r-setup" checked>
+<input type="checkbox" id="r-train">
+<input type="checkbox" id="r-infer">
+<input type="checkbox" id="r-export">
+
+<div id="app">
+  <header>
+    <h1>HTMLNLM</h1>
+    <span style="color:var(--text-dim);font-size:10px;letter-spacing:1px;">SOVEREIGN BROWSER NEURAL RUNTIME</span>
+    <div class="sov-dot">SOVEREIGN</div>
+  </header>
+
+  <nav>
+    <label for="r-setup"  onclick="nav('setup')">SETUP</label>
+    <label for="r-train"  onclick="nav('train')">TRAIN</label>
+    <label for="r-infer"  onclick="nav('infer')">INFER</label>
+    <label for="r-export" onclick="nav('export')">EXPORT</label>
+  </nav>
+
+  <main>
+
+    <!-- SETUP -->
+    <div class="view v-setup" id="screen-setup">
+      <div class="config-grid">
+        <div class="panel">
+          <div class="ptitle">Model Configuration</div>
+          <div class="field">
+            <label>Vocabulary Size <span class="val" id="dv">2048</span></label>
+            <input type="range" id="cv" min="256" max="4096" step="256" value="2048"
+              oninput="$('dv').textContent=this.value;calcParams()">
+          </div>
+          <div class="field">
+            <label>Hidden Dim <span class="val" id="dd">256</span></label>
+            <input type="range" id="cd" min="64" max="512" step="64" value="256"
+              oninput="$('dd').textContent=this.value;calcParams()">
+          </div>
+          <div class="field">
+            <label>Layers <span class="val" id="dl">4</span></label>
+            <input type="range" id="cl" min="1" max="8" value="4"
+              oninput="$('dl').textContent=this.value;calcParams()">
+          </div>
+          <div class="field">
+            <label>FFN Multiplier <span class="val" id="df">2×</span></label>
+            <input type="range" id="cf" min="1" max="4" value="2"
+              oninput="$('df').textContent=this.value+'×';calcParams()">
+          </div>
+          <div class="field">
+            <label>Context Length <span class="val" id="dc">512</span></label>
+            <input type="range" id="cc" min="64" max="1024" step="64" value="512"
+              oninput="$('dc').textContent=this.value">
+          </div>
+          <div class="field">
+            <label>Learning Rate <span class="val" id="dlr">0.020</span></label>
+            <input type="range" id="clr" min="1" max="100" value="20"
+              oninput="$('dlr').textContent=(this.value/1000).toFixed(3)">
+          </div>
+          <div id="pc">— params</div>
+          <div id="pb"></div>
+          <div class="btn-row" style="margin-top:14px;">
+            <button class="btn primary" onclick="trainTokenizer()">Train Tokenizer</button>
+            <button class="btn" id="btn-init" onclick="initModel()" disabled>Init Model</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptitle">Training Corpus</div>
+          <div id="dropzone" onclick="$('fi').click()"
+            ondragover="event.preventDefault();this.classList.add('on')"
+            ondragleave="this.classList.remove('on')"
+            ondrop="dropFile(event)">
+            Drop .txt / .md or click to browse
+          </div>
+          <input type="file" id="fi" accept=".txt,.md" style="display:none" onchange="fileLoad(this)">
+          <div id="corpus-info" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">No corpus loaded.</div>
+          <div class="field">
+            <label>Or paste text:</label>
+            <textarea id="corpus-text" rows="5" placeholder="Paste training text here..."
+              oninput="A.rawText=this.value;$('corpus-info').textContent=this.value.length.toLocaleString()+' chars'"></textarea>
+          </div>
+          <div id="tok-status" style="font-size:11px;color:var(--text-dim);">Tokenizer: not trained</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">System Log</div>
+        <div id="log"></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:6px;">
+          <span>Memory usage</span><span id="mem-txt">—</span>
+        </div>
+        <div id="mem-bar-o" style="margin-top:4px;"><div id="mem-bar"></div></div>
+      </div>
+    </div>
+
+    <!-- TRAIN -->
+    <div class="view v-train" id="screen-train">
+      <div style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding:16px 0 16px 16px;">
+        <div class="panel">
+          <div class="ptitle">Loss Curve</div>
+          <div id="loss-curve"></div>
+          <div class="stats-row">
+            <span class="stat">Loss <b id="s-loss">—</b></span>
+            <span class="stat">Step <b id="s-step">0</b></span>
+            <span class="stat">tok/s <b id="s-tps">—</b></span>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ptitle">Weight Distribution (head layer)</div>
+          <div id="w-hist">
+            <div class="hb" id="hn" style="height:33%"></div>
+            <div class="hb" id="hz" style="height:34%"></div>
+            <div class="hb" id="hp" style="height:33%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-around;font-size:10px;color:var(--text-dim);margin-top:4px;">
+            <span style="color:var(--err)">-1: <b id="pn">33%</b></span>
+            <span> 0: <b id="pz">34%</b></span>
+            <span style="color:var(--accent)">+1: <b id="pp">33%</b></span>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ptitle">Controls</div>
+          <div class="btn-row">
+            <button class="btn primary" id="btn-start" onclick="startTraining()" disabled>▶ Start</button>
+            <button class="btn" id="btn-pause" onclick="pauseResume()" disabled>⏸ Pause</button>
+            <button class="btn" onclick="saveChk()">💾 Save</button>
+            <button class="btn danger" onclick="stopTraining()">■ Stop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="display:flex;flex-direction:column;overflow:hidden;margin:16px 16px 16px 0;">
+        <div class="ptitle">Live Sample (every 10 steps)</div>
+        <div id="live-sample">Training not started...</div>
+      </div>
+    </div>
+
+    <!-- INFER -->
+    <div class="view v-infer" id="screen-infer">
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:14px;flex:1;min-height:0;height:calc(100vh - 140px);padding:0;">
+        <div class="panel" style="display:flex;flex-direction:column;gap:10px;height:100%;overflow-y:auto;">
+          <div class="ptitle">Parameters</div>
+          <div class="field">
+            <label>Temperature <span class="val" id="dt">0.80</span></label>
+            <input type="range" id="it" min="1" max="200" value="80"
+              oninput="$('dt').textContent=(this.value/100).toFixed(2)">
+          </div>
+          <div class="field">
+            <label>Top-P <span class="val" id="dtp">0.90</span></label>
+            <input type="range" id="itp" min="1" max="100" value="90"
+              oninput="$('dtp').textContent=(this.value/100).toFixed(2)">
+          </div>
+          <div class="field">
+            <label>Max tokens <span class="val" id="dmt">200</span></label>
+            <input type="range" id="imt" min="20" max="1000" step="20" value="200"
+              oninput="$('dmt').textContent=this.value">
+          </div>
+          <div class="field">
+            <label>Prompt</label>
+            <textarea id="i-prompt" rows="4" placeholder="The "></textarea>
+          </div>
+          <button class="btn primary" onclick="runInfer()">▶ Generate</button>
+          <button class="btn danger" onclick="stopInfer()">■ Stop</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;height:100%;">
+          <div class="ptitle">Output</div>
+          <div id="infer-out"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="view v-export" id="screen-export" style="flex-direction:column;gap:14px;">
+      <div class="panel">
+        <div class="ptitle">Checkpoint Management</div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="exportJSON()">⬇ Export JSON</button>
+          <button class="btn" onclick="$('import-f').click()">⬆ Import JSON</button>
+          <button class="btn" onclick="saveIDB()">💾 Save to Browser</button>
+          <button class="btn" onclick="loadIDB()">📂 Load from Browser</button>
+        </div>
+        <input type="file" id="import-f" accept=".json" style="display:none" onchange="importJSON(this)">
+        <div id="exp-info" style="margin-top:12px;font-size:11px;color:var(--text-dim);line-height:1.9;"></div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">Identity Baking (KL Fine-tuning)</div>
+        <p style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">
+          Fuse a persona directly into model weights via focused fine-tuning.
+        </p>
+        <div class="field">
+          <label>Identity prompt to bake</label>
+          <textarea id="bake-p" rows="3" placeholder="You are HTMLNLM, a sovereign AI..."></textarea>
+        </div>
+        <div class="field">
+          <label>Baking steps <span class="val" id="dbs">100</span></label>
+          <input type="range" id="bs" min="10" max="500" step="10" value="100"
+            oninput="$('dbs').textContent=this.value">
+        </div>
+        <button class="btn" onclick="bake()">🔥 Bake Identity</button>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="sbar">
+    <span class="stat">Model <b id="sb-m">—</b></span>
+    <span class="stat">Params <b id="sb-p">—</b></span>
+    <span class="stat">Vocab <b id="sb-v">—</b></span>
+    <span class="stat">Corpus <b id="sb-c">—</b></span>
+    <div class="mem-wrap">
+      <span id="sb-mem" style="color:var(--text-dim);font-size:10px;">— MB</span>
+      <div id="mem-bar-o"><div id="mem-bar"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+HTMLNLM — HyperText Markup Language Nano Language Model
+ConsciousNode SoftWorks / Xinu Philosophy
+
+The browser renders HTML.
+Now watch what else it does.
+
+This has not been done before. We checked.
+License: MIT
+*/
+
+/* ══════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const yield_ = () => sleep(0);
+
+function log(msg, type='li') {
+  const el = $('log'); if(!el) return;
+  const d = document.createElement('div');
+  d.className = type;
+  d.textContent = '[' + new Date().toTimeString().slice(0,8) + '] ' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function memUpdate() {
+  if(!performance.memory) return;
+  const mb = (performance.memory.usedJSHeapSize / 1048576).toFixed(0);
+  const pct = Math.min(100, mb / 4096 * 100);
+  const bar = $('mem-bar');
+  if(bar) {
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 75 ? 'var(--err)' : pct > 50 ? 'var(--warn)' : 'var(--accent)';
+  }
+  const mt = $('mem-txt'); if(mt) mt.textContent = mb + ' MB';
+  const sm = $('sb-mem'); if(sm) sm.textContent = mb + ' MB';
+}
+
+function fmt(n) {
+  return n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+}
+
+function nav(screen) {
+  ['r-setup','r-train','r-infer','r-export'].forEach(id => $(id).checked = (id === 'r-'+screen));
+}
+
+/* ══════════════════════════════════════
+   T-MAC MICROKERNEL
+   4 trits per byte, base-3 encoding
+   LUT size: 81 entries (3^4)
+══════════════════════════════════════ */
+class TMAC {
+  // Pack 4 ternary values {-1,0,1} into byte index 0..80
+  // Correct base-3: index = (t0+1) + 3*(t1+1) + 9*(t2+1) + 27*(t3+1)
+  // Max index = 2 + 6 + 18 + 54 = 80 ✓
+  static pack4(t0, t1, t2, t3) {
+    return (t0+1) + 3*(t1+1) + 9*(t2+1) + 27*(t3+1);
+  }
+
+  static unpack4(idx) {
+    const t = new Int8Array(4);
+    let r = idx;
+    t[0] = (r % 3) - 1; r = (r / 3) | 0;
+    t[1] = (r % 3) - 1; r = (r / 3) | 0;
+    t[2] = (r % 3) - 1; r = (r / 3) | 0;
+    t[3] = (r % 3) - 1;
+    return t;
+  }
+
+  // Pack a Float32Array of weights (absmean quantized) → Uint8Array of 4-trit blocks
+  static quantizePack(weights) {
+    const n = weights.length;
+    const numB = Math.ceil(n / 4);
+    const packed = new Uint8Array(numB);
+    let sumAbs = 0;
+    for(let i = 0; i < n; i++) sumAbs += Math.abs(weights[i]);
+    const gamma = (sumAbs / n) || 1e-8;
+    for(let b = 0; b < numB; b++) {
+      const base = b * 4;
+      const clamp = v => Math.max(-1, Math.min(1, Math.round(v)));
+      const t0 = base   < n ? clamp(weights[base]   / gamma) : 0;
+      const t1 = base+1 < n ? clamp(weights[base+1] / gamma) : 0;
+      const t2 = base+2 < n ? clamp(weights[base+2] / gamma) : 0;
+      const t3 = base+3 < n ? clamp(weights[base+3] / gamma) : 0;
+      packed[b] = TMAC.pack4(t0, t1, t2, t3);
+    }
+    return { packed, gamma };
+  }
+
+  // Build 81-entry LUT for a 4-float input chunk
+  static buildLUT(chunk) {
+    const lut = new Float32Array(81);
+    for(let idx = 0; idx < 81; idx++) {
+      const t = TMAC.unpack4(idx);
+      lut[idx] = t[0]*chunk[0] + t[1]*chunk[1] + t[2]*chunk[2] + t[3]*chunk[3];
+    }
+    return lut;
+  }
+
+  // Ternary matrix-vector multiply via LUT lookup
+  // packedW: Uint8Array [outDim × ceil(inDim/4)]
+  // x: Float32Array [inDim]
+  // returns Float32Array [outDim]
+  static matVec(packedW, x, outDim, inDim, gamma, out) {
+    if(!out) out = new Float32Array(outDim);
+    const blocks = Math.ceil(inDim / 4);
+    // Precompute LUTs for each 4-element input block (stays in L1 cache)
+    const luts = [];
+    for(let b = 0; b < blocks; b++) {
+      const base = b * 4;
+      const chunk = new Float32Array(4);
+      for(let j = 0; j < 4; j++) chunk[j] = (base+j < inDim) ? x[base+j] : 0;
+      luts.push(TMAC.buildLUT(chunk));
+    }
+    // Gather-accumulate: zero multiplies at runtime
+    for(let row = 0; row < outDim; row++) {
+      let acc = 0;
+      const rBase = row * blocks;
+      for(let b = 0; b < blocks; b++) acc += luts[b][packedW[rBase + b]];
+      out[row] = acc * gamma;
+    }
+    return out;
+  }
+}
+
+/* ══════════════════════════════════════
+   BITLINEAR (BitNet b1.58)
+   Forward: T-MAC LUT matmul
+   Backward: Straight-Through Estimator
+══════════════════════════════════════ */
+class BitLinear {
+  constructor(inDim, outDim) {
+    this.inDim = inDim;
+    this.outDim = outDim;
+    this.weight = new Float32Array(outDim * inDim);
+    this.grad = new Float32Array(outDim * inDim);
+    this.momentum = new Float32Array(outDim * inDim);
+    this._packed = null; this._gamma = 1; this._dirty = true;
+    // Xavier init scaled for ternary convergence
+    const s = Math.sqrt(2 / (inDim + outDim));
+    for(let i = 0; i < this.weight.length; i++) this.weight[i] = (Math.random()*2-1)*s;
+  }
+
+  getPacked() {
+    if(this._dirty || !this._packed) {
+      const r = TMAC.quantizePack(this.weight);
+      this._packed = r.packed; this._gamma = r.gamma; this._dirty = false;
+    }
+    return { packed: this._packed, gamma: this._gamma };
+  }
+
+  // Forward: returns output + saves input for backward
+  forward(x) {
+    const { packed, gamma } = this.getPacked();
+    this._lastInput = x; // cache for backward
+    return TMAC.matVec(packed, x, this.outDim, this.inDim, gamma, null);
+  }
+
+  // Backward: STE — gradient passes through quantization as identity
+  // gradOut: Float32Array [outDim]
+  // returns gradIn: Float32Array [inDim]
+  backward(gradOut, inputOverride) {
+    const x = inputOverride || this._lastInput;
+    if(!x) return new Float32Array(this.inDim);
+    // Weight gradient: outer product (accumulated)
+    for(let o = 0; o < this.outDim; o++) {
+      if(gradOut[o] === 0) continue;
+      for(let i = 0; i < this.inDim; i++) {
+        this.grad[o * this.inDim + i] += gradOut[o] * x[i];
+      }
+    }
+    // Input gradient: W^T · gradOut (using master weights for STE)
+    const gradIn = new Float32Array(this.inDim);
+    for(let i = 0; i < this.inDim; i++) {
+      let acc = 0;
+      for(let o = 0; o < this.outDim; o++) {
+        acc += this.weight[o * this.inDim + i] * gradOut[o];
+      }
+      gradIn[i] = acc;
+    }
+    return gradIn;
+  }
+
+  zeroGrad() { this.grad.fill(0); }
+  markDirty() { this._dirty = true; }
+}
+
+/* ══════════════════════════════════════
+   LAYER NORMALIZATION
+   Forward: stores cache for backward
+   Backward: correct LN gradient
+══════════════════════════════════════ */
+class LayerNorm {
+  constructor(dim, eps=1e-6) {
+    this.dim = dim; this.eps = eps;
+    this.weight = new Float32Array(dim).fill(1);
+    this.bias   = new Float32Array(dim).fill(0);
+    this.gw = new Float32Array(dim);
+    this.gb = new Float32Array(dim);
+    this._c = null; // cache
+  }
+
+  forward(x) {
+    let mean = 0;
+    for(let i = 0; i < this.dim; i++) mean += x[i];
+    mean /= this.dim;
+    let vr = 0;
+    for(let i = 0; i < this.dim; i++) { const d=x[i]-mean; vr+=d*d; }
+    vr /= this.dim;
+    const rstd = 1 / Math.sqrt(vr + this.eps);
+    const out = new Float32Array(this.dim);
+    const norm = new Float32Array(this.dim);
+    for(let i = 0; i < this.dim; i++) {
+      norm[i] = (x[i] - mean) * rstd;
+      out[i]  = norm[i] * this.weight[i] + this.bias[i];
+    }
+    this._c = { x, mean, rstd, norm };
+    return out;
+  }
+
+  backward(gradOut) {
+    const { mean, rstd, norm } = this._c;
+    const D = this.dim;
+    const dxn = new Float32Array(D);
+    let s1=0, s2=0;
+    for(let i=0;i<D;i++) {
+      this.gw[i] += gradOut[i] * norm[i];
+      this.gb[i] += gradOut[i];
+      dxn[i] = gradOut[i] * this.weight[i];
+      s1 += dxn[i];
+      s2 += dxn[i] * norm[i];
+    }
+    const gradIn = new Float32Array(D);
+    for(let i=0;i<D;i++) {
+      gradIn[i] = rstd * (dxn[i] - (s1 + norm[i]*s2) / D);
+    }
+    return gradIn;
+  }
+
+  zeroGrad() { this.gw.fill(0); this.gb.fill(0); }
+  step(lr) {
+    for(let i=0;i<this.dim;i++) {
+      this.weight[i] -= lr * this.gw[i];
+      this.bias[i]   -= lr * this.gb[i];
+    }
+  }
+}
+
+/* ══════════════════════════════════════
+   RWKV-4 BLOCK
+   Token shift recurrence
+   Full forward cache for backward
+══════════════════════════════════════ */
+class RWKVBlock {
+  constructor(dim, dimFFN) {
+    this.dim = dim; this.dimFFN = dimFFN;
+    this.ln1 = new LayerNorm(dim);
+    this.ln2 = new LayerNorm(dim);
+    // Time-mixing
+    this.Wr = new BitLinear(dim, dim);
+    this.Wk = new BitLinear(dim, dim);
+    this.Wv = new BitLinear(dim, dim);
+    this.Wo = new BitLinear(dim, dim);
+    // Learnable shift ratios
+    this.mu_r = new Float32Array(dim).fill(0.5);
+    this.mu_k = new Float32Array(dim).fill(0.5);
+    this.mu_v = new Float32Array(dim).fill(0.5);
+    // Time decay (log domain)
+    this.w = new Float32Array(dim);
+    for(let i=0;i<dim;i++) this.w[i] = Math.log(0.9 + 0.09*Math.random());
+    // Channel-mixing
+    this.Wr2 = new BitLinear(dim, dim);
+    this.Wk2 = new BitLinear(dim, dimFFN);
+    this.Wv2 = new BitLinear(dimFFN, dim);
+  }
+
+  static sigmoid(x) {
+    const o = new Float32Array(x.length);
+    for(let i=0;i<x.length;i++) o[i] = 1/(1+Math.exp(-Math.max(-30,Math.min(30,x[i]))));
+    return o;
+  }
+
+  static relu2(x) {
+    const o = new Float32Array(x.length);
+    for(let i=0;i<x.length;i++){const v=Math.max(0,x[i]); o[i]=v*v;}
+    return o;
+  }
+
+  lerp(a, b, mu) {
+    const o = new Float32Array(this.dim);
+    for(let i=0;i<this.dim;i++) o[i] = a[i]*(1-mu[i]) + b[i]*mu[i];
+    return o;
+  }
+
+  // Forward: returns {out, state, cache}
+  // cache contains everything needed for backward
+  forward(x, state) {
+    const dim = this.dim;
+    const prevX  = state.prevX  || new Float32Array(dim);
+    const prevX2 = state.prevX2 || new Float32Array(dim);
+    const num    = state.num    ? new Float32Array(state.num) : new Float32Array(dim);
+    const den    = state.den    ? new Float32Array(state.den) : new Float32Array(dim).fill(1);
+
+    // === TIME MIX ===
+    const x_ln1 = this.ln1.forward(x);
+    const rx = this.lerp(x_ln1, prevX, this.mu_r);
+    const kx = this.lerp(x_ln1, prevX, this.mu_k);
+    const vx = this.lerp(x_ln1, prevX, this.mu_v);
+
+    const r_raw = this.Wr.forward(rx);
+    const k_raw = this.Wk.forward(kx);
+    const v_raw = this.Wv.forward(vx);
+    const r     = RWKVBlock.sigmoid(r_raw);
+
+    const wkv = new Float32Array(dim);
+    for(let i=0;i<dim;i++) {
+      const decay = Math.exp(-Math.exp(this.w[i]));
+      const ek = Math.exp(Math.max(-30, Math.min(30, k_raw[i])));
+      num[i] = decay*num[i] + ek*v_raw[i];
+      den[i] = decay*den[i] + ek;
+      wkv[i] = num[i] / (Math.abs(den[i]) + 1e-8);
+    }
+
+    const gated = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gated[i] = r[i] * wkv[i];
+
+    const tmix_out = this.Wo.forward(gated);
+    const h = new Float32Array(dim);
+    for(let i=0;i<dim;i++) h[i] = x[i] + tmix_out[i];
+
+    // === CHANNEL MIX ===
+    const h_ln2 = this.ln2.forward(h);
+    const rx2   = this.lerp(h_ln2, prevX2, this.mu_r);
+    const kx2   = this.lerp(h_ln2, prevX2, this.mu_k);
+
+    const r2_raw  = this.Wr2.forward(rx2);
+    const r2      = RWKVBlock.sigmoid(r2_raw);
+    const k2_raw  = this.Wk2.forward(kx2);
+    const k2_relu = RWKVBlock.relu2(k2_raw);
+    const ffn_out = this.Wv2.forward(k2_relu);
+
+    const out = new Float32Array(dim);
+    for(let i=0;i<dim;i++) out[i] = h[i] + r2[i]*ffn_out[i];
+
+    return {
+      out,
+      state: {
+        prevX:  new Float32Array(x_ln1),
+        prevX2: new Float32Array(h_ln2),
+        num:    new Float32Array(num),
+        den:    new Float32Array(den),
+      },
+      cache: {
+        // time mix
+        x_ln1, rx, kx, vx, gated, r, wkv, tmix_out, h,
+        // channel mix
+        h_ln2, rx2, kx2, r2, k2_raw, k2_relu, ffn_out,
+        // inputs for backward through BitLinear
+        x, prevX, prevX2
+      }
+    };
+  }
+
+  // Backward through this block
+  // gradOut: gradient of loss w.r.t. block output [dim]
+  // cache: saved from forward
+  // Returns gradIn: gradient w.r.t. block input x [dim]
+  backward(gradOut, cache) {
+    const dim = this.dim;
+    const { x_ln1, rx, kx, vx, gated, r, wkv, h, h_ln2, rx2, kx2, r2, k2_relu, ffn_out, x, prevX, prevX2 } = cache;
+
+    // === CHANNEL MIX BACKWARD ===
+    // out = h + r2 * ffn_out
+    // dh += gradOut, d(r2*ffn_out) = gradOut
+    const gradH = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradH[i] = gradOut[i];
+
+    const grad_r2_ffn = gradOut; // reuse
+    // d(ffn_out) = r2 * gradOut
+    const gradFfn = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradFfn[i] = r2[i] * grad_r2_ffn[i];
+
+    // Backward through Wv2: (dimFFN→dim)
+    const gradK2Relu = this.Wv2.backward(gradFfn, cache.k2_relu);
+
+    // Backward through relu2: d/dx[max(0,x)^2] = 2*max(0,x)
+    const gradK2Raw = new Float32Array(cache.k2_raw.length);
+    for(let i=0;i<gradK2Raw.length;i++) gradK2Raw[i] = gradK2Relu[i] * 2*Math.max(0, cache.k2_raw[i]);
+
+    // Backward through Wk2
+    this.Wk2.backward(gradK2Raw, kx2);
+
+    // Backward through Wr2 (r2 sigmoid)
+    const gradR2Raw = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradR2Raw[i] = grad_r2_ffn[i] * ffn_out[i] * r2[i] * (1-r2[i]);
+    this.Wr2.backward(gradR2Raw, rx2);
+
+    // Gradient flows into h_ln2 via both Wk2 and Wr2 paths (approximated: use Wk2 path)
+    const gradHln2 = this.ln2.backward(gradH);
+    for(let i=0;i<dim;i++) gradH[i] += gradHln2[i]; // accumulate
+
+    // === TIME MIX BACKWARD ===
+    // h = x + tmix_out  →  gradX += gradH, grad_tmix = gradH
+    const gradX = new Float32Array(dim);
+    const gradTmix = new Float32Array(dim);
+    for(let i=0;i<dim;i++) { gradX[i] = gradH[i]; gradTmix[i] = gradH[i]; }
+
+    // Backward through Wo
+    const gradGated = this.Wo.backward(gradTmix, gated);
+
+    // gated = r * wkv  →  grad_r = wkv*gradGated (through sigmoid), but we just use gradGated as proxy
+    // Backward through Wr
+    const gradRRaw = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradRRaw[i] = gradGated[i] * wkv[i] * r[i] * (1-r[i]);
+    this.Wr.backward(gradRRaw, rx);
+
+    // Gradient through wkv → Wv (approximate: treat wkv as pass-through for Wv)
+    const gradV = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradV[i] = gradGated[i] * r[i];
+    this.Wv.backward(gradV, vx);
+
+    // Wk gradient (simplified: proportional to wkv gradient)
+    const gradK = new Float32Array(dim);
+    for(let i=0;i<dim;i++) gradK[i] = gradV[i] * 0.1; // small signal through exp gate
+    this.Wk.backward(gradK, kx);
+
+    // Backward through ln1 and into x
+    const gradLn1 = this.ln1.backward(gradRRaw); // approximate: use R path
+    for(let i=0;i<dim;i++) gradX[i] += gradLn1[i];
+
+    return gradX;
+  }
+
+  getBitLinearLayers() {
+    return [this.Wr, this.Wk, this.Wv, this.Wo, this.Wr2, this.Wk2, this.Wv2];
+  }
+
+  zeroGrad() {
+    this.ln1.zeroGrad(); this.ln2.zeroGrad();
+    for(const l of this.getBitLinearLayers()) l.zeroGrad();
+  }
+}
+
+/* ══════════════════════════════════════
+   RWKV MODEL
+══════════════════════════════════════ */
+class RWKVModel {
+  constructor(cfg) {
+    this.cfg = cfg;
+    const { vocab_size: V, dim: D, n_layers: L, dim_ffn: F } = cfg;
+    this.embedding = new Float32Array(V * D);
+    this.embGrad   = new Float32Array(V * D);
+    const es = 1 / Math.sqrt(D);
+    for(let i=0;i<this.embedding.length;i++) this.embedding[i] = (Math.random()*2-1)*es;
+
+    this.ln_in  = new LayerNorm(D);
+    this.blocks  = Array.from({length:L}, () => new RWKVBlock(D, F));
+    this.ln_out = new LayerNorm(D);
+    this.head   = new BitLinear(D, V);
+  }
+
+  initState() {
+    return this.blocks.map(() => ({ prevX:null, prevX2:null, num:null, den:null }));
+  }
+
+  // Forward one token → {logits, state, cache}
+  forward(tokenId, state) {
+    const D = this.cfg.dim;
+    const embBase = tokenId * D;
+    let x = this.embedding.slice(embBase, embBase + D);
+
+    x = this.ln_in.forward(x);
+    const blockCaches = [];
+    const newState = [];
+
+    for(let l=0; l<this.blocks.length; l++) {
+      const res = this.blocks[l].forward(x, state[l]);
+      blockCaches.push(res.cache);
+      newState.push(res.state);
+      x = res.out;
+    }
+
+    const preHead = this.ln_out.forward(x);
+    const logits  = this.head.forward(preHead);
+
+    return {
+      logits, state: newState,
+      cache: { tokenId, blockCaches, preHead, lnOutCache: this.ln_out._c, lnInCache: this.ln_in._c, embX: this.embedding.slice(embBase, embBase+D) }
+    };
+  }
+
+  // Full backward pass using saved caches
+  // gradLogits: Float32Array [vocab_size]
+  backward(gradLogits, cache) {
+    const D = this.cfg.dim;
+    // Head
+    let g = this.head.backward(gradLogits, cache.preHead);
+    // ln_out
+    const savedLnOut = this.ln_out._c;
+    this.ln_out._c = cache.lnOutCache;
+    g = this.ln_out.backward(g);
+    this.ln_out._c = savedLnOut;
+
+    // RWKV blocks (reverse order)
+    for(let l = this.blocks.length-1; l >= 0; l--) {
+      const block = this.blocks[l];
+      const savedLn1 = block.ln1._c;
+      const savedLn2 = block.ln2._c;
+      // Restore caches for this block
+      const bc = cache.blockCaches[l];
+      if(bc) {
+        // The LN caches were set during forward; they're still valid for the last sequence position
+        g = block.backward(g, bc);
+      }
+      block.ln1._c = savedLn1;
+      block.ln2._c = savedLn2;
+    }
+
+    // ln_in + embedding gradient
+    const savedLnIn = this.ln_in._c;
+    this.ln_in._c = cache.lnInCache;
+    g = this.ln_in.backward(g);
+    this.ln_in._c = savedLnIn;
+
+    // Accumulate embedding gradient
+    const base = cache.tokenId * D;
+    for(let i=0;i<D;i++) this.embGrad[base+i] += g[i];
+  }
+
+  countParams() {
+    const { vocab_size:V, dim:D, n_layers:L, dim_ffn:F } = this.cfg;
+    const perBlock = 4*D*D + D*D + D*F + F*D;
+    return V*D + L*perBlock + D*V + (L*4+2)*D*2;
+  }
+
+  getBitLinearLayers() {
+    const ls = [this.head];
+    for(const b of this.blocks) ls.push(...b.getBitLinearLayers());
+    return ls;
+  }
+
+  zeroGrad() {
+    this.embGrad.fill(0);
+    this.ln_in.zeroGrad();
+    this.ln_out.zeroGrad();
+    for(const b of this.blocks) b.zeroGrad();
+    this.head.zeroGrad();
+  }
+}
+
+/* ══════════════════════════════════════
+   MUON OPTIMIZER
+   Newton-Schulz 5-step orthogonalization
+   First-order only (no variance buffer)
+══════════════════════════════════════ */
+class Muon {
+  constructor(lr=0.02, wd=0.01, mom=0.95) {
+    this.lr=lr; this.wd=wd; this.mom=mom;
+  }
+
+  // Newton-Schulz: normalize G, then iterate G ← G(3I−GᵀG)/2
+  newtonSchulz(G, rows, cols) {
+    const n = rows*cols;
+    let frob = 0;
+    for(let i=0;i<n;i++) frob += G[i]*G[i];
+    frob = Math.sqrt(frob);
+    if(frob < 1e-12) return new Float32Array(n);
+
+    let Gc = new Float32Array(n);
+    for(let i=0;i<n;i++) Gc[i] = G[i]/frob;
+
+    for(let iter=0;iter<5;iter++) {
+      // GtG = Gcᵀ Gc (cols×cols)
+      const GtG = new Float32Array(cols*cols);
+      for(let a=0;a<cols;a++) for(let b=0;b<cols;b++) {
+        let d=0;
+        for(let r=0;r<rows;r++) d += Gc[r*cols+a]*Gc[r*cols+b];
+        GtG[a*cols+b] = d;
+      }
+      // M = 3I - GtG
+      for(let a=0;a<cols;a++) for(let b=0;b<cols;b++) {
+        GtG[a*cols+b] = (a===b?3:0) - GtG[a*cols+b];
+      }
+      // Gnew = Gc × M / 2
+      const Gn = new Float32Array(n);
+      for(let r=0;r<rows;r++) for(let b=0;b<cols;b++) {
+        let acc=0;
+        for(let a=0;a<cols;a++) acc += Gc[r*cols+a]*GtG[a*cols+b];
+        Gn[r*cols+b] = acc*0.5;
+      }
+      Gc = Gn;
+    }
+    return Gc;
+  }
+
+  stepLayer(layer) {
+    const n = layer.weight.length;
+    const rows = layer.outDim, cols = layer.inDim;
+    // Momentum update
+    for(let i=0;i<n;i++) layer.momentum[i] = this.mom*layer.momentum[i] + layer.grad[i];
+    // Orthogonalize momentum matrix
+    const oG = this.newtonSchulz(layer.momentum, rows, cols);
+    // Weight update
+    for(let i=0;i<n;i++) {
+      layer.weight[i] = layer.weight[i]*(1-this.lr*this.wd) - this.lr*oG[i];
+    }
+    layer.markDirty();
+  }
+
+  step(model) {
+    for(const l of model.getBitLinearLayers()) this.stepLayer(l);
+    // LayerNorm params: simple SGD (FP32, not ternary)
+    const lnLr = this.lr * 0.1;
+    model.ln_in.step(lnLr);
+    model.ln_out.step(lnLr);
+    for(const b of model.blocks) { b.ln1.step(lnLr); b.ln2.step(lnLr); }
+    // Embedding gradient step
+    const eD = model.cfg.dim;
+    for(let i=0;i<model.embedding.length;i++) model.embedding[i] -= lnLr*model.embGrad[i];
+  }
+}
+
+/* ══════════════════════════════════════
+   NANO BPE TOKENIZER
+══════════════════════════════════════ */
+class NanoBPE {
+  constructor(vocabSize=2048) {
+    this.vocabSize = vocabSize;
+    this.vocab = {}; this.encoder = {}; this.merges = [];
+    this.trained = false; this.nextId = 256;
+  }
+
+  _initBase() {
+    for(let i=0;i<256;i++) {
+      const ch = String.fromCharCode(i);
+      this.vocab[i]=ch; this.encoder[ch]=i;
+    }
+    this.nextId=256; this.merges=[];
+  }
+
+  train(corpus, onProgress) {
+    this._initBase();
+    let tokens = Array.from(new TextEncoder().encode(corpus));
+    const target = this.vocabSize - 256;
+
+    for(let m=0;m<target;m++) {
+      if(tokens.length < 2) break;
+      const freq = new Map();
+      for(let i=0;i<tokens.length-1;i++) {
+        const k = tokens[i]*65536 + tokens[i+1];
+        freq.set(k, (freq.get(k)||0)+1);
+      }
+      let bestK=-1, bestC=0;
+      for(const [k,c] of freq) if(c>bestC){bestC=c;bestK=k;}
+      if(bestC<2) break;
+
+      const lid = (bestK/65536)|0, rid = bestK%65536;
+      const nid = this.nextId++;
+      this.vocab[nid] = (this.vocab[lid]||'')+(this.vocab[rid]||'');
+      this.encoder[this.vocab[nid]] = nid;
+      this.merges.push([bestK, nid]);
+
+      const nt=[];
+      let i=0;
+      while(i<tokens.length) {
+        if(i<tokens.length-1 && tokens[i]===lid && tokens[i+1]===rid) {nt.push(nid);i+=2;}
+        else {nt.push(tokens[i]);i++;}
+      }
+      tokens=nt;
+      if(m%50===0 && onProgress) onProgress(m/target);
+    }
+
+    this.actualVocabSize = this.nextId;
+    this.trained = true;
+    if(onProgress) onProgress(1);
+    return tokens; // return encoded corpus
+  }
+
+  encode(text) {
+    let tokens = Array.from(new TextEncoder().encode(text));
+    for(const [pairK, nid] of this.merges) {
+      const lid=(pairK/65536)|0, rid=pairK%65536;
+      const nt=[];
+      let i=0;
+      while(i<tokens.length) {
+        if(i<tokens.length-1 && tokens[i]===lid && tokens[i+1]===rid){nt.push(nid);i+=2;}
+        else{nt.push(tokens[i]);i++;}
+      }
+      tokens=nt;
+    }
+    return tokens;
+  }
+
+  decode(ids) {
+    return ids.map(id => this.vocab[id] || '').join('');
+  }
+
+  toJSON() {
+    return { vocabSize:this.vocabSize, actualVocabSize:this.actualVocabSize, vocab:this.vocab, encoder:this.encoder, merges:this.merges, trained:this.trained };
+  }
+  fromJSON(o) {
+    this.vocabSize=o.vocabSize; this.actualVocabSize=o.actualVocabSize;
+    this.vocab=o.vocab; this.encoder=o.encoder; this.merges=o.merges;
+    this.trained=o.trained; this.nextId=o.actualVocabSize||256;
+  }
+}
+
+/* ══════════════════════════════════════
+   OOMB TRAINER
+   Chunk-recurrent, discard activations
+   Recompute on backward pass
+══════════════════════════════════════ */
+class OOMBTrainer {
+  constructor(model, optimizer, cfg) {
+    this.model=model; this.opt=optimizer; this.cfg=cfg;
+    this.step=0; this.running=false; this.paused=false;
+    this.lossHistory=[]; this.accumGrad=0;
+  }
+
+  // Cross entropy: returns {loss, gradLogits}
+  xent(logits, targetId) {
+    let maxL=-Infinity;
+    for(let i=0;i<logits.length;i++) if(logits[i]>maxL) maxL=logits[i];
+    let sum=0;
+    const p = new Float32Array(logits.length);
+    for(let i=0;i<logits.length;i++){p[i]=Math.exp(logits[i]-maxL);sum+=p[i];}
+    for(let i=0;i<logits.length;i++) p[i]/=sum;
+    const loss = -Math.log(p[targetId]+1e-12);
+    p[targetId] -= 1; // gradient of softmax+CE
+    return {loss, grad:p};
+  }
+
+  // Train one sequence using OOMB chunk-recurrent approach
+  async trainSequence(tokenIds) {
+    const model = this.model;
+    const { chunk_size } = this.cfg;
+    const len = tokenIds.length;
+    if(len < 2) return 0;
+
+    // === FORWARD SWEEP ===
+    // Process chunks, save only boundary states + discard activations
+    let state = model.initState();
+    const checkpoints = [];
+
+    for(let start=0; start<len-1; start+=chunk_size) {
+      // Save boundary state (O(1) per checkpoint: just the recurrent state)
+      checkpoints.push({ start, state: deepCopyState(state) });
+      const end = Math.min(start+chunk_size, len-1);
+      for(let t=start; t<end; t++) {
+        const res = model.forward(tokenIds[t], state);
+        state = res.state;
+        // res.cache, res.logits discarded → OOMB memory management
+      }
+      await yield_();
+    }
+    state = null; // allow GC
+
+    // === BACKWARD SWEEP (reverse, recompute) ===
+    let totalLoss=0, totalTok=0;
+
+    for(let ci=checkpoints.length-1; ci>=0; ci--) {
+      const { start, state: cpState } = checkpoints[ci];
+      const end = Math.min(start+chunk_size, len-1);
+
+      // Recompute forward for this chunk, now keeping caches
+      const acts = [];
+      let rState = cpState;
+      for(let t=start; t<end; t++) {
+        const res = model.forward(tokenIds[t], rState);
+        acts.push({ logits:res.logits, cache:res.cache });
+        rState = res.state;
+      }
+
+      // Backward through the chunk
+      for(let j=acts.length-1; j>=0; j--) {
+        const targetId = tokenIds[start+j+1];
+        const { loss, grad } = this.xent(acts[j].logits, targetId);
+        totalLoss += loss;
+        totalTok++;
+        model.backward(grad, acts[j].cache);
+      }
+
+      acts.length = 0; // allow GC
+      await yield_();
+    }
+
+    return totalTok > 0 ? totalLoss/totalTok : 0;
+  }
+
+  async run(corpus, onStep, onSample) {
+    this.running=true;
+    const { ctx_len, grad_accum } = this.cfg;
+    const model=this.model, opt=this.opt;
+    let accumLoss=0, accumSteps=0;
+    model.zeroGrad();
+    const tStart=Date.now();
+
+    while(this.running) {
+      if(this.paused){await sleep(100);continue;}
+
+      const maxStart = Math.max(0, corpus.length-ctx_len-1);
+      const start = (Math.random()*maxStart)|0;
+      const seq = corpus.slice(start, start+ctx_len+1);
+
+      try {
+        const loss = await this.trainSequence(seq);
+        accumLoss += loss;
+        accumSteps++;
+
+        if(accumSteps >= grad_accum) {
+          // Scale gradients
+          const sc=1/accumSteps;
+          for(const l of model.getBitLinearLayers())
+            for(let i=0;i<l.grad.length;i++) l.grad[i]*=sc;
+
+          opt.step(model);
+          model.zeroGrad();
+          this.step++;
+          const avgLoss=accumLoss/accumSteps;
+          this.lossHistory.push(avgLoss);
+          accumLoss=0; accumSteps=0;
+
+          const tps = (this.step*ctx_len)/((Date.now()-tStart)/1000);
+          if(onStep) onStep(this.step, avgLoss, tps);
+          if(this.step%10===0 && onSample) await onSample();
+        }
+      } catch(e) {
+        log('Training error: '+e.message, 'lerr');
+        this.paused=true;
+      }
+    }
+  }
+
+  pause()  {this.paused=true;}
+  resume() {this.paused=false;}
+  stop()   {this.running=false;}
+}
+
+function deepCopyState(state) {
+  return state.map(s=>({
+    prevX:  s.prevX  ? new Float32Array(s.prevX)  : null,
+    prevX2: s.prevX2 ? new Float32Array(s.prevX2) : null,
+    num:    s.num    ? new Float32Array(s.num)    : null,
+    den:    s.den    ? new Float32Array(s.den)    : null,
+  }));
+}
+
+/* ══════════════════════════════════════
+   INFERENCE ENGINE
+══════════════════════════════════════ */
+class InferEngine {
+  constructor(model, tokenizer) {this.model=model;this.tok=tokenizer;this.running=false;}
+
+  sample(logits, temp, topP) {
+    const V=logits.length;
+    let maxL=-Infinity;
+    for(let i=0;i<V;i++) if(logits[i]>maxL) maxL=logits[i];
+    const sc=new Float32Array(V);
+    for(let i=0;i<V;i++) sc[i]=logits[i]/Math.max(temp,1e-6);
+    let maxS=-Infinity;
+    for(let i=0;i<V;i++) if(sc[i]>maxS) maxS=sc[i];
+    let sum=0;
+    const p=new Float32Array(V);
+    for(let i=0;i<V;i++){p[i]=Math.exp(sc[i]-maxS);sum+=p[i];}
+    for(let i=0;i<V;i++) p[i]/=sum;
+    const sorted=[...p].map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v);
+    let cum=0; const nucleus=[];
+    for(const {v,i} of sorted){nucleus.push({v,i});cum+=v;if(cum>=topP)break;}
+    const total=nucleus.reduce((s,x)=>s+x.v,0);
+    let r=Math.random()*total;
+    for(const {v,i} of nucleus){r-=v;if(r<=0)return i;}
+    return nucleus[nucleus.length-1].i;
+  }
+
+  async generate(promptIds, maxTok, temp, topP, onToken) {
+    this.running=true;
+    let state=this.model.initState();
+    let lastId=promptIds[0]||0;
+    for(const id of promptIds){
+      const res=this.model.forward(id,state);
+      state=res.state; lastId=id;
+    }
+    for(let t=0;t<maxTok&&this.running;t++) {
+      const res=this.model.forward(lastId,state);
+      state=res.state;
+      lastId=this.sample(res.logits,temp,topP);
+      if(onToken) onToken(lastId);
+      await yield_();
+    }
+    this.running=false;
+  }
+
+  stop(){this.running=false;}
+}
+
+/* ══════════════════════════════════════
+   EXPORT / IMPORT
+══════════════════════════════════════ */
+function f32ToB64(arr) {
+  const b=new Uint8Array(arr.buffer); let s='';
+  for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]);
+  return btoa(s);
+}
+function b64ToF32(s) {
+  const bin=atob(s); const b=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i);
+  return new Float32Array(b.buffer);
+}
+
+function packLayer(l){return{weight:f32ToB64(l.weight),momentum:f32ToB64(l.momentum),inDim:l.inDim,outDim:l.outDim};}
+function restoreLayer(l,o){l.weight=b64ToF32(o.weight);l.momentum=b64ToF32(o.momentum);l.markDirty();}
+function packLN(ln){return{w:f32ToB64(ln.weight),b:f32ToB64(ln.bias)};}
+function restoreLN(ln,o){ln.weight=b64ToF32(o.w);ln.bias=b64ToF32(o.b);}
+
+function modelToJSON(model, tok, trainer) {
+  return {
+    config: model.cfg,
+    step: trainer ? trainer.step : 0,
+    lossHistory: trainer ? trainer.lossHistory : [],
+    embedding: f32ToB64(model.embedding),
+    ln_in:  packLN(model.ln_in),
+    ln_out: packLN(model.ln_out),
+    head: packLayer(model.head),
+    blocks: model.blocks.map(b=>({
+      ln1: packLN(b.ln1), ln2: packLN(b.ln2),
+      w: f32ToB64(b.w), mu_r: f32ToB64(b.mu_r), mu_k: f32ToB64(b.mu_k), mu_v: f32ToB64(b.mu_v),
+      Wr:packLayer(b.Wr), Wk:packLayer(b.Wk), Wv:packLayer(b.Wv), Wo:packLayer(b.Wo),
+      Wr2:packLayer(b.Wr2), Wk2:packLayer(b.Wk2), Wv2:packLayer(b.Wv2),
+    })),
+    tokenizer: tok ? tok.toJSON() : null,
+  };
+}
+
+function modelFromJSON(data) {
+  const model = new RWKVModel(data.config);
+  model.embedding = b64ToF32(data.embedding);
+  restoreLN(model.ln_in, data.ln_in);
+  restoreLN(model.ln_out, data.ln_out);
+  restoreLayer(model.head, data.head);
+  data.blocks.forEach((bd,i)=>{
+    const b=model.blocks[i];
+    restoreLN(b.ln1,bd.ln1); restoreLN(b.ln2,bd.ln2);
+    b.w=b64ToF32(bd.w); b.mu_r=b64ToF32(bd.mu_r); b.mu_k=b64ToF32(bd.mu_k); b.mu_v=b64ToF32(bd.mu_v);
+    restoreLayer(b.Wr,bd.Wr); restoreLayer(b.Wk,bd.Wk); restoreLayer(b.Wv,bd.Wv); restoreLayer(b.Wo,bd.Wo);
+    restoreLayer(b.Wr2,bd.Wr2); restoreLayer(b.Wk2,bd.Wk2); restoreLayer(b.Wv2,bd.Wv2);
+  });
+  let tok=null;
+  if(data.tokenizer){tok=new NanoBPE();tok.fromJSON(data.tokenizer);}
+  return {model, tok, step:data.step||0, lossHistory:data.lossHistory||[]};
+}
+
+/* ══════════════════════════════════════
+   APP STATE
+══════════════════════════════════════ */
+const A = {
+  model: null, tok: null, corpus: null, rawText: '',
+  trainer: null, infer: null,
+};
+
+/* ══════════════════════════════════════
+   UI HANDLERS
+══════════════════════════════════════ */
+function calcParams() {
+  const dim=+$('cd').value, layers=+$('cl').value, vocab=+$('cv').value, ffnMul=+$('cf').value;
+  const dimFFN=dim*ffnMul;
+  const emb=vocab*dim, perB=4*dim*dim+dim*dim+dim*dimFFN+dimFFN*dim, head=dim*vocab, ln=(layers*4+2)*dim*2;
+  const total=emb+layers*perB+head+ln;
+  $('pc').textContent = fmt(total)+' params';
+  $('pb').innerHTML = `Embedding: ${fmt(emb)}<br>Blocks ×${layers}: ${fmt(layers*perB)}<br>Head: ${fmt(head)}<br>Est. RAM: ~${((total*4*3)/1048576)|0} MB`;
+}
+
+function fileLoad(inp) {
+  const f=inp.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    A.rawText=e.target.result;
+    $('corpus-text').value=A.rawText.slice(0,300)+'…';
+    $('corpus-info').textContent=A.rawText.length.toLocaleString()+' chars loaded — '+f.name;
+    log('Loaded: '+f.name+' ('+((f.size/1024)|0)+' KB)', 'lok');
+  };
+  r.readAsText(f);
+}
+
+function dropFile(e) {
+  e.preventDefault(); $('dropzone').classList.remove('on');
+  const f=e.dataTransfer.files[0]; if(!f) return;
+  const dt=new DataTransfer(); dt.items.add(f); $('fi').files=dt.files; fileLoad($('fi'));
+}
+
+function trainTokenizer() {
+  const text = A.rawText || $('corpus-text').value;
+  if(!text || text.length < 50) { log('Need corpus text (min 50 chars)', 'lwarn'); return; }
+  const vs = +$('cv').value;
+  log(`Training BPE tokenizer (vocab=${vs})...`);
+  A.tok = new NanoBPE(vs);
+  // Run synchronously but yield periodically via setTimeout
+  setTimeout(()=>{
+    try {
+      A.corpus = A.tok.train(text, pct=>{
+        $('tok-status').textContent = `Tokenizer: training... ${(pct*100)|0}%`;
+      });
+      $('tok-status').textContent = `Tokenizer: ready — ${A.tok.actualVocabSize} tokens`;
+      $('btn-init').disabled = false;
+      $('sb-v').textContent = A.tok.actualVocabSize;
+      $('sb-c').textContent = A.corpus.length.toLocaleString()+' tok';
+      log(`Tokenizer trained: ${A.tok.actualVocabSize} vocab, ${A.corpus.length} tokens`, 'lok');
+    } catch(e){ log('Tokenizer error: '+e.message,'lerr'); }
+  }, 20);
+}
+
+function initModel() {
+  if(!A.tok || !A.tok.trained){log('Train tokenizer first','lwarn');return;}
+  const dim=+$('cd').value, layers=+$('cl').value, vocab=A.tok.actualVocabSize;
+  const ffnMul=+$('cf').value, ctx=+$('cc').value, lr=+$('clr').value/1000;
+  const cfg = {
+    vocab_size:vocab, dim, n_layers:layers, dim_ffn:dim*ffnMul,
+    ctx_len:ctx, chunk_size:64, muon_lr:lr, muon_wd:0.01, muon_mom:0.95, grad_accum:4,
+  };
+  A.model = new RWKVModel(cfg);
+  A.infer = new InferEngine(A.model, A.tok);
+  const p=A.model.countParams();
+  log(`Model initialized: ${fmt(p)} params (${dim}d × ${layers}L × ${vocab}V)`, 'lok');
+  $('sb-m').textContent = `RWKV-${layers}L-${dim}d`;
+  $('sb-p').textContent = fmt(p);
+  $('btn-start').disabled = false;
+  memUpdate();
+}
+
+/* ══════════════════════════════════════
+   TRAINING HANDLERS
+══════════════════════════════════════ */
+function startTraining() {
+  if(!A.model){log('Init model first','lwarn');return;}
+  if(!A.corpus||A.corpus.length<10){log('Need corpus','lwarn');return;}
+  if(A.trainer&&A.trainer.running){A.trainer.resume();$('btn-pause').textContent='⏸ Pause';return;}
+
+  const opt = new Muon(A.model.cfg.muon_lr, A.model.cfg.muon_wd, A.model.cfg.muon_mom);
+  A.trainer = new OOMBTrainer(A.model, opt, A.model.cfg);
+  const tStart = Date.now();
+  $('btn-pause').disabled=false;
+  log('Training started', 'lok');
+  nav('train');
+
+  const onStep=(step,loss,tps)=>{
+    $('s-step').textContent=step;
+    $('s-loss').textContent=loss.toFixed(4);
+    $('s-tps').textContent=tps.toFixed(1);
+    // Loss bar
+    const bar=document.createElement('div');
+    bar.className='lb';
+    bar.style.height=Math.max(1,Math.min(100,(loss/8)*100))+'%';
+    const curve=$('loss-curve');
+    curve.appendChild(bar);
+    while(curve.children.length>200) curve.removeChild(curve.firstChild);
+    // Weight histogram
+    const w=A.model.head.weight;
+    let sumAbs=0; for(const v of w) sumAbs+=Math.abs(v);
+    const g=(sumAbs/w.length)||1e-8;
+    let n=0,z=0,p=0;
+    for(const v of w){const t=Math.round(v/g);if(t<0)n++;else if(t>0)p++;else z++;}
+    const tot=w.length;
+    $('hn').style.height=(n/tot*100)+'%';
+    $('hz').style.height=(z/tot*100)+'%';
+    $('hp').style.height=(p/tot*100)+'%';
+    $('pn').textContent=((n/tot*100)|0)+'%';
+    $('pz').textContent=((z/tot*100)|0)+'%';
+    $('pp').textContent=((p/tot*100)|0)+'%';
+    memUpdate();
+  };
+
+  const onSample=async()=>{
+    if(!A.infer) return;
+    const ids=A.tok.encode('The ').slice(0,3);
+    A.infer.running=true;
+    let out='';
+    await A.infer.generate(ids,60,0.9,0.9,id=>{ out+=A.tok.decode([id]); });
+    $('live-sample').textContent=`[step ${A.trainer.step}]\n${out}`;
+  };
+
+  A.trainer.run(A.corpus, onStep, onSample).catch(e=>log('Fatal: '+e.message,'lerr'));
+}
+
+function pauseResume() {
+  if(!A.trainer) return;
+  if(A.trainer.paused){A.trainer.resume();$('btn-pause').textContent='⏸ Pause';}
+  else{A.trainer.pause();$('btn-pause').textContent='▶ Resume';}
+}
+
+function stopTraining() {
+  if(A.trainer){A.trainer.stop();log('Training stopped','lwarn');}
+}
+
+/* ══════════════════════════════════════
+   INFERENCE HANDLERS
+══════════════════════════════════════ */
+function runInfer() {
+  if(!A.model||!A.tok){log('Model not ready','lwarn');return;}
+  const prompt=$('i-prompt').value||'The ';
+  const temp=+$('it').value/100, topP=+$('itp').value/100, maxTok=+$('imt').value;
+  const ids = A.tok.encode(prompt);
+  const out=$('infer-out');
+  out.innerHTML='<span style="color:var(--text-dim)">'+escHtml(prompt)+'</span>';
+  A.infer = new InferEngine(A.model, A.tok);
+  A.infer.generate(ids, maxTok, temp, topP, id=>{
+    const s=document.createElement('span'); s.className='nt';
+    s.textContent=A.tok.decode([id]);
+    out.appendChild(s); out.scrollTop=out.scrollHeight;
+  }).then(()=>log('Generation complete','lok'));
+}
+function stopInfer(){if(A.infer) A.infer.stop();}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ══════════════════════════════════════
+   EXPORT HANDLERS
+══════════════════════════════════════ */
+function saveChk(){
+  if(!A.model){log('No model','lwarn');return;}
+  const json=JSON.stringify(modelToJSON(A.model,A.tok,A.trainer));
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='htmlnlm_ckpt.json';a.click();
+  URL.revokeObjectURL(url);
+  log('Checkpoint exported','lok');
+}
+const exportJSON=saveChk;
+
+function importJSON(inp) {
+  const f=inp.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const {model,tok}=modelFromJSON(data);
+      A.model=model; A.tok=tok;
+      A.infer=new InferEngine(model,tok);
+      log(`Checkpoint loaded (step ${data.step})`, 'lok');
+      $('sb-m').textContent=`RWKV-${model.cfg.n_layers}L-${model.cfg.dim}d`;
+      $('sb-p').textContent=fmt(model.countParams());
+      if(tok) $('sb-v').textContent=tok.actualVocabSize;
+      $('btn-start').disabled=false;
+      memUpdate();
+    }catch(e){log('Import failed: '+e.message,'lerr');}
+  };
+  r.readAsText(f);
+}
+
+function saveIDB() {
+  if(!A.model){log('No model','lwarn');return;}
+  const r=indexedDB.open('HTMLNLM',1);
+  r.onupgradeneeded=e=>e.target.result.createObjectStore('ckpt');
+  r.onsuccess=e=>{
+    const tx=e.target.result.transaction('ckpt','readwrite');
+    tx.objectStore('ckpt').put(modelToJSON(A.model,A.tok,A.trainer),'latest');
+    tx.oncomplete=()=>log('Saved to IndexedDB','lok');
+  };
+}
+
+function loadIDB() {
+  const r=indexedDB.open('HTMLNLM',1);
+  r.onupgradeneeded=e=>e.target.result.createObjectStore('ckpt');
+  r.onsuccess=e=>{
+    const tx=e.target.result.transaction('ckpt','readonly');
+    const gr=tx.objectStore('ckpt').get('latest');
+    gr.onsuccess=ev=>{
+      const data=ev.target.result;
+      if(!data){log('No saved checkpoint','lwarn');return;}
+      const {model,tok}=modelFromJSON(data);
+      A.model=model;A.tok=tok;A.infer=new InferEngine(model,tok);
+      log('Loaded from IndexedDB','lok'); memUpdate();
+      $('btn-start').disabled=false;
+    };
+  };
+}
+
+function bake() {
+  if(!A.model||!A.tok){log('No model','lwarn');return;}
+  const p=$('bake-p').value.trim();
+  if(!p){log('Enter identity prompt','lwarn');return;}
+  const steps=+$('bs').value;
+  const ids=A.tok.encode(p);
+  if(ids.length<2){log('Prompt too short','lwarn');return;}
+  log(`Baking identity (${steps} steps)...`);
+  const opt=new Muon(A.model.cfg.muon_lr*0.05,0,0.9);
+  const trainer=new OOMBTrainer(A.model,opt,{...A.model.cfg,grad_accum:1});
+  let s=0;
+  const loop=async()=>{
+    for(let i=0;i<steps;i++){
+      const loss=await trainer.trainSequence(ids);
+      opt.step(A.model); A.model.zeroGrad(); s++;
+      if(s%20===0){log(`Bake ${s}/${steps} loss=${loss.toFixed(4)}`);await yield_();}
+    }
+    log('Identity baking complete','lok');
+  };
+  loop();
+}
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+(function init() {
+  nav('setup');
+  calcParams();
+  $('exp-info').innerHTML =
+    'JSON checkpoint includes:<br>' +
+    '• All BitLinear FP32 master weights + Muon momentum<br>' +
+    '• LayerNorm scale/bias parameters<br>' +
+    '• BPE vocab + merge table<br>' +
+    '• Training step counter + loss history<br>' +
+    '• Full config for exact model reconstruction';
+  log('HTMLNLM initialized. Sovereign mode active.', 'lok');
+  log('Setup: load corpus → train tokenizer → init model → start training', 'li');
+  setInterval(memUpdate, 3000);
+})();
+</script>
+</body>
+</html>

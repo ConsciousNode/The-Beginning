@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM-Kernel IDE</title>
+    <style>
+        :root {
+            --bg-base: #0f111a;
+            --bg-panel: #1a1c29;
+            --bg-header: #26293a;
+            --fg-base: #8f93a2;
+            --fg-active: #ffffff;
+            --accent: #82aaff;
+            --border: #3b3f51;
+            --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --c-red: #ff5370;
+            --c-green: #c3e88d;
+            --c-yellow: #ffcb6b;
+            --c-blue: #82aaff;
+            --c-magenta: #c792ea;
+            --c-cyan: #89ddff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-base);
+            color: var(--fg-base);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--bg-header);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            height: 40px;
+        }
+
+        header h1 {
+            font-size: 14px;
+            color: var(--fg-active);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .header-controls button {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--fg-base);
+            padding: 4px 8px;
+            margin-left: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .header-controls button:hover {
+            color: var(--fg-active);
+            border-color: var(--accent);
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 80px);
+        }
+
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+
+        .panel-header {
+            background-color: var(--bg-panel);
+            padding: 4px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .right-panels {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-panel {
+            flex: 1;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .memory-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea#editor {
+            flex: 1;
+            background-color: transparent;
+            color: var(--c-green);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 16px;
+            border: none;
+            resize: none;
+            outline: none;
+            white-space: pre;
+            tab-size: 4;
+        }
+
+        .console-output {
+            flex: 1;
+            background-color: var(--bg-base);
+            color: var(--fg-active);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: 12px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Page Map Vis */
+        .page-map {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+            background-color: var(--bg-panel);
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .page-box {
+            width: 14px;
+            height: 14px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .page-box:hover { transform: scale(1.2); }
+        .page-active { border-color: var(--fg-active); transform: scale(1.2); z-index: 10; }
+        
+        .page-kernel { background-color: var(--c-red); }
+        .page-stack { background-color: var(--c-yellow); }
+        .page-heap { background-color: var(--c-blue); }
+        .page-free { background-color: var(--bg-base); }
+
+        .hex-dump {
+            flex: 1;
+            background-color: var(--bg-base);
+            color: var(--fg-base);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 12px;
+            overflow-y: auto;
+            line-height: 1.4;
+        }
+
+        .hex-dump span.addr { color: var(--accent); user-select: none; }
+        .hex-dump span.hex { color: var(--c-yellow); }
+        .hex-dump span.ascii { color: var(--c-cyan); }
+        .hex-dump span.zero { color: #444; }
+
+        footer {
+            background-color: var(--bg-header);
+            border-top: 1px solid var(--border);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toolbar button {
+            background-color: var(--bg-panel);
+            color: var(--fg-active);
+            border: 1px solid var(--border);
+            padding: 4px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toolbar button:hover {
+            background-color: var(--border);
+        }
+
+        .toolbar button.primary {
+            background-color: #2e442e;
+            border-color: var(--c-green);
+            color: var(--c-green);
+        }
+
+        .toolbar button.primary:hover {
+            background-color: var(--c-green);
+            color: var(--bg-base);
+        }
+
+        .status-bar {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--fg-base);
+            display: flex;
+            gap: 16px;
+        }
+
+        .status-ready { color: var(--c-green); }
+        .status-error { color: var(--c-red); }
+        .status-running { color: var(--c-yellow); }
+        .status-yielded { color: var(--c-magenta); }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--fg-base); }
+    </style>
+</head>
+<body>
+
+    <!-- === WASM-KERNEL-EMBED-START === -->
+    <script type="module" id="wasm-kernel-core">
+        const EMBED_MODE = (() => {
+            if (window.WASM_KERNEL_EMBED) return 'explicit';
+            if (window.parent !== window) return 'iframe';
+            if (document.currentScript?.dataset?.kernel) return 'script';
+            return 'standalone';
+        })();
+
+        // =====================================================================
+        // 1. PURE JS WAT ASSEMBLER (MicroWAT)
+        // =====================================================================
+        
+        class WATAssembler {
+            constructor() {
+                this.OP = {
+                    unreachable: 0x00, nop: 0x01, block: 0x02, loop: 0x03, if: 0x04, else: 0x05, end: 0x0B, br: 0x0C, br_if: 0x0D, return: 0x0F, call: 0x10, drop: 0x1A,
+                    local_get: 0x20, local_set: 0x21, local_tee: 0x22, global_get: 0x23, global_set: 0x24,
+                    i32_load: 0x28, i32_store: 0x36, i32_store8: 0x3A,
+                    i32_const: 0x41, i32_eqz: 0x45, i32_eq: 0x46, i32_ne: 0x47, i32_lt_s: 0x48, i32_lt_u: 0x49, i32_le_s: 0x4a, i32_le_u: 0x4b, i32_gt_s: 0x4c, i32_gt_u: 0x4d, i32_ge_s: 0x4e, i32_ge_u: 0x4f,
+                    i32_add: 0x6A, i32_sub: 0x6B, i32_mul: 0x6C, i32_div_s: 0x6D, i32_div_u: 0x6E, i32_rem_s: 0x6F, i32_rem_u: 0x70, i32_and: 0x71, i32_or: 0x72, i32_xor: 0x73, i32_shl: 0x74, i32_shr_s: 0x75, i32_shr_u: 0x76
+                };
+                this.VAL_TYPE = { i32: 0x7F, i64: 0x7E, f32: 0x7D, f64: 0x7C };
+            }
+
+            compile(watCode, isUserCode = false) {
+                const tokens = this._tokenize(watCode);
+                const ast = this._parseSExpr(tokens);
+
+                // Auto-link user code to the Inner Sanctum
+                if (isUserCode && ast[0] === 'module') {
+                    for (let i = ast.length - 1; i >= 1; i--) {
+                        if (Array.isArray(ast[i])) {
+                            if (ast[i][0] === 'memory') ast.splice(i, 1);
+                            if (ast[i][0] === 'export' && Array.isArray(ast[i][2]) && ast[i][2][0] === 'memory') ast.splice(i, 1);
+                        }
+                    }
+                    ast.splice(1, 0, ['import', {type:'string', val:'inner'}, {type:'string', val:'mem'}, ['memory', '1']]);
+                    ast.splice(1, 0, ['import', {type:'string', val:'inner'}, {type:'string', val:'cycle_budget'}, ['global', '$cycle_budget', ['mut', 'i32']]]);
+                }
+
+                return this._emitWasm(ast, isUserCode);
+            }
+
+            _tokenize(str) {
+                const tokens = [];
+                let i = 0;
+                while (i < str.length) {
+                    let c = str[i];
+                    if (c === '(' || c === ')') { tokens.push(c); i++; }
+                    else if (/\s/.test(c)) { i++; }
+                    else if (c === ';' && str[i+1] === ';') { while(i < str.length && str[i] !== '\n') i++; }
+                    else if (c === '"') {
+                        let s = ''; i++;
+                        while(i < str.length && str[i] !== '"') {
+                            if (str[i] === '\\' && str[i+1] !== undefined) {
+                                if (str[i+1] === 'n') s += '\n';
+                                else if (str[i+1] === 't') s += '\t';
+                                else if (str[i+1] === '\\') s += '\\';
+                                else if (str[i+1] === '"') s += '"';
+                                else if (/[0-9a-fA-F]/.test(str[i+1]) && /[0-9a-fA-F]/.test(str[i+2])) {
+                                    s += String.fromCharCode(parseInt(str.substring(i+1, i+3), 16));
+                                    i += 2;
+                                } else { s += str[i+1]; }
+                                i++;
+                            } else {
+                                s += str[i];
+                            }
+                            i++;
+                        }
+                        tokens.push({ type: 'string', val: s }); i++;
+                    }
+                    else {
+                        let word = '';
+                        while (i < str.length && !/\s|\(|\)|\;/.test(str[i])) { word += str[i]; i++; }
+                        if (word.length > 0) tokens.push(word);
+                    }
+                }
+                return tokens;
+            }
+
+            _parseSExpr(tokens) {
+                let pos = 0;
+                function parse() {
+                    if (pos >= tokens.length) return null;
+                    let t = tokens[pos++];
+                    if (t === '(') {
+                        let list = [];
+                        while (pos < tokens.length && tokens[pos] !== ')') {
+                            list.push(parse());
+                        }
+                        pos++;
+                        return list;
+                    }
+                    return t;
+                }
+                const ast = [];
+                while (pos < tokens.length) {
+                    let node = parse();
+                    if (node) ast.push(node);
+                }
+                return ast[0];
+            }
+
+            _encodeULEB128(val) {
+                let bytes = [];
+                do {
+                    let byte = val & 0x7f;
+                    val >>= 7;
+                    if (val !== 0) byte |= 0x80;
+                    bytes.push(byte);
+                } while (val !== 0);
+                return bytes;
+            }
+
+            _encodeSLEB128(val) {
+                let bytes = [];
+                let more = true;
+                while (more) {
+                    let byte = val & 0x7f;
+                    val >>= 7;
+                    let signBit = byte & 0x40;
+                    if ((val === 0 && !signBit) || (val === -1 && signBit)) {
+                        more = false;
+                    } else { byte |= 0x80; }
+                    bytes.push(byte);
+                }
+                return bytes;
+            }
+
+            _encodeString(str) {
+                const utf8 = new TextEncoder().encode(str);
+                return [...this._encodeULEB128(utf8.length), ...utf8];
+            }
+
+            _emitWasm(ast, isUserCode) {
+                if (!ast || ast[0] !== 'module') throw new Error("Invalid WAT: root must be module");
+                
+                const sections = { type: [], import: [], func: [], memory: [], global: [], export: [], code: [], data: [] };
+                
+                const types = []; 
+                const funcs = [];
+                const imports = [];
+                const exports = [];
+                const memory = [];
+                const globals = [];
+                const data = [];
+                
+                let funcIdx = 0;
+                let globalIdx = 0;
+                let globalFuncMap = {};
+                let globalIdxMap = {};
+
+                // Pass 1
+                for (let i = 1; i < ast.length; i++) {
+                    let node = ast[i];
+                    if (!Array.isArray(node)) continue;
+                    
+                    if (node[0] === 'import') {
+                        let mod = node[1].val;
+                        let field = node[2].val;
+                        let desc = node[3];
+                        if (desc[0] === 'func') {
+                            let name = desc[1].startsWith('$') ? desc[1] : null;
+                            let params = [], results = [];
+                            for(let j=1; j<desc.length; j++) {
+                                if (Array.isArray(desc[j])) {
+                                    if (desc[j][0] === 'param') params.push(...desc[j].slice(1).map(p => this.VAL_TYPE[p]));
+                                    if (desc[j][0] === 'result') results.push(this.VAL_TYPE[desc[j][1]]);
+                                }
+                            }
+                            let sig = { params, results };
+                            let typeIdx = types.findIndex(t => JSON.stringify(t) === JSON.stringify(sig));
+                            if (typeIdx === -1) { typeIdx = types.length; types.push(sig); }
+                            
+                            imports.push({ mod, field, kind: 0, typeIdx });
+                            if (name) globalFuncMap[name] = funcIdx;
+                            funcIdx++;
+                        } else if (desc[0] === 'memory') {
+                            imports.push({ mod, field, kind: 2, min: parseInt(desc[1]) });
+                        } else if (desc[0] === 'global') {
+                            let name = desc[1];
+                            let mut = desc[2][0] === 'mut' ? 1 : 0;
+                            let type = this.VAL_TYPE[mut ? desc[2][1] : desc[2]];
+                            imports.push({ mod, field, kind: 3, desc: [type, mut] });
+                            if (name) globalIdxMap[name] = globalIdx;
+                            globalIdx++;
+                        }
+                    } else if (node[0] === 'memory') {
+                        memory.push({ min: parseInt(node[1]) });
+                    } else if (node[0] === 'global') {
+                        let name = null, exportName = null;
+                        let typeNode, initNode;
+                        
+                        for(let j=1; j<node.length; j++) {
+                            if (typeof node[j] === 'string' && node[j].startsWith('$')) name = node[j];
+                            else if (Array.isArray(node[j]) && node[j][0] === 'export') exportName = node[j][1].val;
+                            else if (!typeNode) typeNode = node[j];
+                            else if (!initNode) initNode = node[j];
+                        }
+
+                        let mut = 0, type = 0x7F;
+                        if (Array.isArray(typeNode) && typeNode[0] === 'mut') { mut = 1; type = this.VAL_TYPE[typeNode[1]]; }
+                        else if (typeof typeNode === 'string') { type = this.VAL_TYPE[typeNode]; }
+
+                        let initVal = 0;
+                        if (Array.isArray(initNode) && initNode[0] === 'i32.const') initVal = parseInt(initNode[1]);
+
+                        if (name) globalIdxMap[name] = globalIdx;
+                        globals.push({ mut, type, initVal });
+                        if (exportName) exports.push({ name: exportName, kind: 3, index: globalIdx });
+                        globalIdx++;
+                    }
+                }
+
+                // Pass 2
+                for (let i = 1; i < ast.length; i++) {
+                    let node = ast[i];
+                    if (!Array.isArray(node)) continue;
+
+                    if (node[0] === 'func') {
+                        let name = null, exportName = null;
+                        let params = [], results = [], locals = [], body = [];
+                        let localMap = {}; 
+                        let localIdx = 0;
+
+                        for (let j = 1; j < node.length; j++) {
+                            let item = node[j];
+                            if (typeof item === 'string' && item.startsWith('$')) {
+                                name = item;
+                                globalFuncMap[name] = funcIdx;
+                            } else if (Array.isArray(item)) {
+                                if (item[0] === 'export') exportName = item[1].val;
+                                else if (item[0] === 'param') {
+                                    for (let k = 1; k < item.length; k++) {
+                                        if (item[k].startsWith('$')) { localMap[item[k]] = localIdx++; params.push(this.VAL_TYPE[item[++k]]); }
+                                        else { params.push(this.VAL_TYPE[item[k]]); localIdx++; }
+                                    }
+                                } else if (item[0] === 'result') {
+                                    results.push(this.VAL_TYPE[item[1]]);
+                                } else if (item[0] === 'local') {
+                                    for (let k = 1; k < item.length; k++) {
+                                        if (item[k].startsWith('$')) { localMap[item[k]] = localIdx++; locals.push(this.VAL_TYPE[item[++k]]); }
+                                        else { locals.push(this.VAL_TYPE[item[k]]); localIdx++; }
+                                    }
+                                } else { body.push(item); }
+                            } else { body.push(item); }
+                        }
+
+                        let sig = { params, results };
+                        let typeIdx = types.findIndex(t => JSON.stringify(t) === JSON.stringify(sig));
+                        if (typeIdx === -1) { typeIdx = types.length; types.push(sig); }
+
+                        funcs.push({ typeIdx, locals, body, localMap });
+                        if (exportName) exports.push({ name: exportName, kind: 0, index: funcIdx });
+                        funcIdx++;
+                    } else if (node[0] === 'export') {
+                        let name = node[1].val;
+                        let desc = node[2];
+                        if (desc[0] === 'memory') exports.push({ name, kind: 2, index: parseInt(desc[1] || 0) });
+                        if (desc[0] === 'func') {
+                            let fidx = (typeof desc[1] === 'string' && desc[1].startsWith('$')) ? globalFuncMap[desc[1]] : parseInt(desc[1]);
+                            exports.push({ name, kind: 0, index: fidx });
+                        }
+                    } else if (node[0] === 'data') {
+                        let offsetExpr = node[1];
+                        let bytes = new TextEncoder().encode(node[2].val);
+                        data.push({ offset: offsetExpr, bytes });
+                    }
+                }
+
+                const createSection = (id, payload) => payload.length === 0 ? [] : [id, ...this._encodeULEB128(payload.length), ...payload];
+
+                if (types.length > 0) {
+                    let payload = this._encodeULEB128(types.length);
+                    types.forEach(t => {
+                        payload.push(0x60, ...this._encodeULEB128(t.params.length));
+                        t.params.forEach(p => payload.push(p));
+                        payload.push(...this._encodeULEB128(t.results.length));
+                        t.results.forEach(r => payload.push(r));
+                    });
+                    sections.type = createSection(1, payload);
+                }
+
+                if (imports.length > 0) {
+                    let payload = this._encodeULEB128(imports.length);
+                    imports.forEach(imp => {
+                        payload.push(...this._encodeString(imp.mod), ...this._encodeString(imp.field), imp.kind);
+                        if (imp.kind === 0) payload.push(...this._encodeULEB128(imp.typeIdx));
+                        if (imp.kind === 2) payload.push(0x00, ...this._encodeULEB128(imp.min));
+                        if (imp.kind === 3) payload.push(...imp.desc);
+                    });
+                    sections.import = createSection(2, payload);
+                }
+
+                if (funcs.length > 0) {
+                    let payload = this._encodeULEB128(funcs.length);
+                    funcs.forEach(f => payload.push(...this._encodeULEB128(f.typeIdx)));
+                    sections.func = createSection(3, payload);
+                }
+
+                if (memory.length > 0) {
+                    let payload = this._encodeULEB128(memory.length);
+                    memory.forEach(m => payload.push(0x00, ...this._encodeULEB128(m.min)));
+                    sections.memory = createSection(5, payload);
+                }
+
+                if (globals.length > 0) {
+                    let payload = this._encodeULEB128(globals.length);
+                    globals.forEach(g => {
+                        payload.push(g.type, g.mut, this.OP.i32_const, ...this._encodeSLEB128(g.initVal), this.OP.end);
+                    });
+                    sections.global = createSection(6, payload);
+                }
+
+                if (exports.length > 0) {
+                    let payload = this._encodeULEB128(exports.length);
+                    exports.forEach(exp => {
+                        payload.push(...this._encodeString(exp.name), exp.kind, ...this._encodeULEB128(exp.index));
+                    });
+                    sections.export = createSection(7, payload);
+                }
+
+                if (funcs.length > 0) {
+                    let payload = this._encodeULEB128(funcs.length);
+                    funcs.forEach(f => {
+                        let instrs = [];
+                        
+                        // FIX 2: Instruction-Level Cycle Accounting injection
+                        let cycleBudgetIdx = globalIdxMap['$cycle_budget'];
+                        if (isUserCode && cycleBudgetIdx !== undefined) {
+                            instrs.push(
+                                0x23, ...this._encodeULEB128(cycleBudgetIdx),
+                                0x41, 0x01,
+                                0x6B,
+                                0x24, ...this._encodeULEB128(cycleBudgetIdx),
+                                0x23, ...this._encodeULEB128(cycleBudgetIdx),
+                                0x41, 0x00,
+                                0x48,
+                                0x04, 0x40,
+                                0x00,
+                                0x0B
+                            );
+                        }
+
+                        const parseInst = (inst, target) => {
+                            if (Array.isArray(inst)) {
+                                for (let k = 1; k < inst.length; k++) parseInst(inst[k], target);
+                                parseInst(inst[0], target);
+                            } else {
+                                let opName = inst.replace(/\./g, '_');
+                                if (this.OP[opName] !== undefined) {
+                                    target.push(this.OP[opName]);
+                                    if (opName === 'if' || opName === 'block' || opName === 'loop') target.push(0x40);
+                                } else {
+                                    let prev = target[target.length - 1];
+                                    if (prev === this.OP.i32_const) {
+                                        target.pop();
+                                        target.push(this.OP.i32_const, ...this._encodeSLEB128(parseInt(inst)));
+                                    } else if (prev === this.OP.local_get || prev === this.OP.local_set || prev === this.OP.local_tee) {
+                                        target.pop();
+                                        let idx = inst.startsWith('$') ? f.localMap[inst] : parseInt(inst);
+                                        target.push(prev, ...this._encodeULEB128(idx));
+                                    } else if (prev === this.OP.global_get || prev === this.OP.global_set) {
+                                        target.pop();
+                                        let idx = inst.startsWith('$') ? globalIdxMap[inst] : parseInt(inst);
+                                        target.push(prev, ...this._encodeULEB128(idx));
+                                    } else if (prev === this.OP.call) {
+                                        target.pop();
+                                        let idx = inst.startsWith('$') ? globalFuncMap[inst] : parseInt(inst);
+                                        target.push(prev, ...this._encodeULEB128(idx));
+                                    } else if (prev === this.OP.i32_load || prev === this.OP.i32_store || prev === this.OP.i32_store8) {
+                                        target.pop();
+                                        let offset = inst.startsWith('offset=') ? parseInt(inst.split('=')[1]) : 0;
+                                        target.push(prev, ...this._encodeULEB128(0), ...this._encodeULEB128(offset));
+                                    }
+                                }
+                            }
+                        };
+
+                        for (let k = 0; k < f.body.length; k++) parseInst(f.body[k], instrs);
+                        instrs.push(this.OP.end);
+
+                        let localGroups = [];
+                        let curType = null, count = 0;
+                        for (let t of f.locals) {
+                            if (t === curType) count++;
+                            else {
+                                if (count > 0) localGroups.push({count, type: curType});
+                                curType = t; count = 1;
+                            }
+                        }
+                        if (count > 0) localGroups.push({count, type: curType});
+
+                        let localBytes = [...this._encodeULEB128(localGroups.length)];
+                        for (let g of localGroups) {
+                            localBytes.push(...this._encodeULEB128(g.count), g.type);
+                        }
+
+                        let funcBytes = [...localBytes, ...instrs];
+                        sections.code.push(...this._encodeULEB128(funcBytes.length), ...funcBytes);
+                    });
+                    sections.code = createSection(10, [ ...this._encodeULEB128(funcs.length), ...sections.code ]);
+                }
+
+                if (data.length > 0) {
+                    let payload = this._encodeULEB128(data.length);
+                    data.forEach(d => {
+                        payload.push(0x00, this.OP.i32_const, ...this._encodeSLEB128(parseInt(d.offset[1])), this.OP.end);
+                        payload.push(...this._encodeULEB128(d.bytes.length), ...d.bytes);
+                    });
+                    sections.data = createSection(11, payload);
+                }
+
+                return new Uint8Array([
+                    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+                    ...sections.type, ...sections.import, ...sections.func, ...sections.memory,
+                    ...sections.global, ...sections.export, ...sections.code, ...sections.data
+                ]);
+            }
+        }
+
+        // =====================================================================
+        // 2. THE KERNEL RUNTIME (Inner Sanctum + Bridge)
+        // =====================================================================
+
+        const INNER_SANCTUM_WAT = `
+        (module
+          (import "kernel" "syscall" (func $syscall (param i32 i32 i32) (result i32)))
+          (import "kernel" "mem_grow" (func $mem_grow (param i32) (result i32)))
+          (import "kernel" "time_ms" (func $time_ms (result i64)))
+          (import "kernel" "random" (func $random (result i32)))
+          
+          (memory (export "mem") 1 256)
+          
+          (global $heap_ptr (mut i32) (i32.const 0x10000))
+          
+          (data (i32.const 0x1000) "\\00")
+          (data (i32.const 0x2000) "\\00")
+          
+          (func (export "init") (result i32)
+            i32.const 0x1000
+          )
+          
+          (func (export "alloc") (param $size i32) (result i32)
+            global.get $heap_ptr
+            global.get $heap_ptr
+            local.get $size
+            i32.add
+            global.set $heap_ptr
+          )
+          
+          (func (export "free") (param $ptr i32)
+            drop
+          )
+          
+          (func (export "get_output_buffer") (result i32) i32.const 0x1000)
+          (func (export "get_error_buffer") (result i32) i32.const 0x2000)
+          
+          (func (export "run") (param $ptr i32) (param $len i32) (result i32)
+            i32.const 0
+            local.get $ptr
+            local.get $len
+            call $syscall
+            drop
+            i32.const 42
+          )
+          
+          (global $cycle_budget (export "cycle_budget") (mut i32) (i32.const 0))
+          
+          (func (export "set_cycle_budget") (param $cycles i32)
+            local.get $cycles
+            global.set $cycle_budget
+          )
+          
+          (func (export "get_remaining_cycles") (result i32)
+            global.get $cycle_budget
+          )
+          
+          (func $consume_cycle
+            global.get $cycle_budget
+            i32.const 1
+            i32.sub
+            global.set $cycle_budget
+            global.get $cycle_budget
+            i32.const 0
+            i32.lt_s
+            if
+              unreachable
+            end
+          )
+        )`;
+
+        class Kernel {
+            constructor() {
+                this.innerSanctum = null;
+                this.instance = null;
+                this.outputBuffer = "";
+                this.cycles = 0;
+                this.startTime = 0;
+                
+                // Multitasking
+                this.yielded = false;
+                this.stepMode = false;
+                
+                this.onOutput = (text) => {};
+                this.onStateChange = (state) => {};
+            }
+
+            async boot() {
+                try {
+                    const assembler = new WATAssembler();
+                    const innerWasmBytes = assembler.compile(INNER_SANCTUM_WAT, false);
+                    
+                    const env = {
+                        kernel: {
+                            syscall: this._sys_call.bind(this),
+                            mem_grow: (pages) => {
+                                try {
+                                    const old = this.memory.buffer.byteLength / 65536;
+                                    this.memory.grow(pages);
+                                    return old;
+                                } catch(e) { return -1; }
+                            },
+                            time_ms: () => BigInt(Date.now() - this.startTime),
+                            random: () => typeof crypto !== 'undefined' ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 0xFFFFFFFF)
+                        }
+                    };
+
+                    const module = await WebAssembly.instantiate(innerWasmBytes, env);
+                    this.innerSanctum = module.instance;
+                    this.memory = this.innerSanctum.exports.mem;
+                    this.innerSanctum.exports.init();
+                    
+                    this.onStateChange('ready');
+                    return this;
+                } catch (e) {
+                    console.error("Inner Sanctum boot failed:", e);
+                    throw e;
+                }
+            }
+
+            _sys_call(id, arg1, arg2) {
+                // Cooperative YIELD
+                if (id === 6 || this.stepMode) {
+                    this.yielded = true;
+                    this.stepMode = false;
+                    throw new Error("Yield");
+                }
+
+                switch(id) {
+                    case 0: // SYS_PRINT
+                        const bytes = new Uint8Array(this.memory.buffer, arg1, arg2);
+                        const text = new TextDecoder('utf-8').decode(bytes);
+                        this.outputBuffer += text;
+                        this.onOutput(text);
+                        return arg2;
+                    case 1: // SYS_EXIT
+                        throw new Error(`Kernel Exit (Code: ${arg1})`);
+                    case 2: // SYS_TIME
+                        return Date.now() - this.startTime;
+                    case 3: // SYS_RANDOM
+                        return typeof crypto !== 'undefined' ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 0xFFFFFFFF);
+                    case 4: // SYS_MEMORY_STATS
+                        return this.memory.buffer.byteLength / (64 * 1024);
+                    default: return -1;
+                }
+            }
+
+            async compileAndLoad(watCode) {
+                this.onStateChange('compiling');
+                try {
+                    const assembler = new WATAssembler();
+                    const wasmBytes = assembler.compile(watCode, true);
+                    
+                    const env = {
+                        inner: this.innerSanctum.exports,
+                        kernel: { syscall: this._sys_call.bind(this) }
+                    };
+
+                    const module = await WebAssembly.instantiate(wasmBytes, env);
+                    this.instance = module.instance;
+                    
+                    this.onStateChange('ready');
+                    return true;
+                } catch (e) {
+                    this.onOutput(`\x1b[31m[KERNEL PANIC] Compilation failed: ${e.message}\x1b[0m\n`);
+                    this.onStateChange('error');
+                    throw e;
+                }
+            }
+
+            run() {
+                if (!this.instance || !this.instance.exports.run) throw new Error("Module not loaded or lacks 'run' export");
+
+                this.onStateChange('running');
+                if (!this.yielded) {
+                    this.outputBuffer = "";
+                    this.cycles = 0;
+                    this.startTime = Date.now();
+                }
+                
+                this.yielded = false;
+                const budget = 1000000;
+                this.innerSanctum.exports.set_cycle_budget(budget);
+
+                try {
+                    const result = this.instance.exports.run();
+                    const remaining = this.innerSanctum.exports.get_remaining_cycles();
+                    this.cycles += (budget - remaining);
+                    
+                    const duration = Date.now() - this.startTime;
+                    this.onOutput(`\x1b[32m\n[KERNEL] Process exited normally (Result: ${result}, Time: ${duration}ms, Cycles: ${this.cycles})\x1b[0m\n`);
+                    this.onStateChange('ready');
+                    return { status: 'success', result, output: this.outputBuffer, cycles: this.cycles };
+                } catch (e) {
+                    const remaining = this.innerSanctum.exports.get_remaining_cycles();
+                    this.cycles += (budget - remaining);
+                    
+                    if (e.message.includes("Yield")) {
+                        this.onStateChange('yielded');
+                        return { status: 'yielded', output: this.outputBuffer, cycles: this.cycles };
+                    }
+                    if (e.message.includes("Kernel Exit")) {
+                        this.onOutput(`\x1b[33m\n[KERNEL] ${e.message}\x1b[0m\n`);
+                        this.onStateChange('ready');
+                        return { status: 'exited', output: this.outputBuffer };
+                    }
+                    
+                    let errStr = e.message;
+                    if (errStr.includes('unreachable') && remaining <= 0) {
+                        errStr = "Cycle Budget Exhausted (Trap)";
+                    }
+                    this.onOutput(`\x1b[31m\n[KERNEL PANIC] Runtime exception: ${errStr}\x1b[0m\n`);
+                    this.onStateChange('error');
+                    return { status: 'error', error: errStr };
+                }
+            }
+
+            yield() {
+                this.yielded = true;
+                this.stepMode = true;
+            }
+
+            resume() {
+                return this.run();
+            }
+
+            snapshot() {
+                const buffer = new Uint8Array(this.memory.buffer);
+                const clone = new Uint8Array(buffer.length);
+                clone.set(buffer);
+                return clone.buffer;
+            }
+
+            restore(arrayBuffer) {
+                const current = new Uint8Array(this.memory.buffer);
+                const source = new Uint8Array(arrayBuffer);
+                if (source.length > current.length) {
+                    const pagesNeeded = Math.ceil((source.length - current.length) / (64 * 1024));
+                    this.memory.grow(pagesNeeded);
+                }
+                const newCurrent = new Uint8Array(this.memory.buffer);
+                newCurrent.set(source);
+                this.onOutput(`\x1b[36m[KERNEL] System state restored (${source.length} bytes)\x1b[0m\n`);
+            }
+        }
+
+        // =====================================================================
+        // 3. OUTER SHELL (Host Integration)
+        // =====================================================================
+
+        let activeKernel = new Kernel();
+
+        window.WASMKernel = {
+            version: '2.0.0',
+            mode: EMBED_MODE,
+            
+            boot: async () => {
+                activeKernel = new Kernel();
+                return activeKernel.boot();
+            },
+            
+            exec: async (watCode) => {
+                await activeKernel.compileAndLoad(watCode);
+                return activeKernel.run();
+            },
+            
+            compile: (wat) => {
+                const assembler = new WATAssembler();
+                return assembler.compile(wat, true);
+            },
+            
+            memory: () => activeKernel.memory,
+            stats: () => ({ cycles: activeKernel.cycles, pages: activeKernel.memory.buffer.byteLength / 65536 }),
+            
+            snapshot: () => activeKernel.snapshot(),
+            restore: (buf) => activeKernel.restore(buf),
+            
+            _getKernelInstance: () => activeKernel
+        };
+
+        // postMessage API for Iframe Embedding
+        window.addEventListener('message', (event) => {
+            const d = event.data;
+            if (!d || d.target !== 'wasm-kernel') return;
+            switch(d.action) {
+                case 'exec':
+                    window.WASMKernel.exec(d.code).then(result => {
+                        event.source.postMessage({ source: 'wasm-kernel', id: d.id, result }, '*');
+                    });
+                    break;
+                case 'snapshot':
+                    event.source.postMessage({ source: 'wasm-kernel', id: d.id, snapshot: window.WASMKernel.snapshot() }, '*');
+                    break;
+                case 'restore':
+                    window.WASMKernel.restore(d.buffer);
+                    event.source.postMessage({ source: 'wasm-kernel', id: d.id, status: 'restored' }, '*');
+                    break;
+            }
+        });
+
+    </script>
+    <!-- === WASM-KERNEL-EMBED-END === -->
+
+    <!-- ===================================================================== -->
+    <!-- STANDALONE UI IMPLEMENTATION                                          -->
+    <!-- ===================================================================== -->
+    <script type="module">
+        if (window.WASMKernel.mode === 'standalone' || window.WASMKernel.mode === 'iframe') {
+            
+            const defaultWAT = `;; WASM-Kernel Userland Application
+(module
+  ;; Syscall imported from kernel environment
+  (import "kernel" "syscall" (func $syscall (param i32 i32 i32) (result i32)))
+  
+  ;; Memory and globals are automatically linked to Inner Sanctum
+  
+  ;; Data placed in user heap area
+  (data (i32.const 0x3000) "Hello from the Inner Sanctum!\\n")
+
+  (func (export "run") (result i32)
+    ;; 1. Call SYS_PRINT (0)
+    ;; arguments: syscall(0, ptr=0x3000, len=30)
+    i32.const 0
+    i32.const 0x3000
+    i32.const 30
+    call $syscall
+    drop
+    
+    ;; 2. Math Operation (10 + 32 = 42)
+    i32.const 10
+    i32.const 32
+    i32.add
+  )
+)`;
+
+            const editor = document.getElementById('editor');
+            const consoleOut = document.getElementById('console-out');
+            const pageMap = document.getElementById('page-map');
+            const hexDump = document.getElementById('hex-dump');
+            const btnRun = document.getElementById('btn-run');
+            const btnStep = document.getElementById('btn-step');
+            const btnReset = document.getElementById('btn-reset');
+            const btnSnapshot = document.getElementById('btn-snapshot');
+            const statusText = document.getElementById('status-text');
+            const cyclesText = document.getElementById('cycles-text');
+            const memText = document.getElementById('mem-text');
+
+            let kernel;
+            let memoryInterval = null;
+            let snapshotBuffer = null;
+            let activePage = 0;
+
+            editor.value = defaultWAT;
+
+            function formatANSI(text) {
+                let html = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html = html.replace(/\x1b\[31m/g, '<span style="color: var(--c-red)">');
+                html = html.replace(/\x1b\[32m/g, '<span style="color: var(--c-green)">');
+                html = html.replace(/\x1b\[33m/g, '<span style="color: var(--c-yellow)">');
+                html = html.replace(/\x1b\[36m/g, '<span style="color: var(--c-cyan)">');
+                html = html.replace(/\x1b\[0m/g, '</span>');
+                return html;
+            }
+
+            function updatePageMap() {
+                if (!kernel || !kernel.memory) return;
+                const totalPages = kernel.memory.buffer.byteLength / 65536;
+                let html = '';
+                for(let i=0; i<totalPages; i++) {
+                    let type = 'page-free';
+                    if (i === 0) type = 'page-kernel';
+                    else if (i === 1) type = 'page-stack';
+                    else if (i >= 2 && i < 16) type = 'page-heap';
+                    
+                    let active = i === activePage ? 'page-active' : '';
+                    html += `<div class="page-box ${type} ${active}" data-page="${i}" title="Page ${i} (0x${(i*65536).toString(16)})"></div>`;
+                }
+                pageMap.innerHTML = html;
+                
+                pageMap.querySelectorAll('.page-box').forEach(box => {
+                    box.addEventListener('click', (e) => {
+                        activePage = parseInt(e.target.dataset.page);
+                        updatePageMap();
+                        updateHexDump();
+                    });
+                });
+            }
+
+            function updateHexDump() {
+                if (!kernel || !kernel.memory || !kernel.memory.buffer) return;
+                
+                const baseAddr = activePage * 65536;
+                const bytes = new Uint8Array(kernel.memory.buffer, baseAddr, Math.min(65536, 512));
+                let html = '';
+                
+                for (let i = 0; i < bytes.length; i += 16) {
+                    let hexLine = '';
+                    let asciiLine = '';
+                    for (let j = 0; j < 16; j++) {
+                        if (i + j < bytes.length) {
+                            const b = bytes[i + j];
+                            const hex = b.toString(16).padStart(2, '0').toUpperCase();
+                            hexLine += `<span class="${b === 0 ? 'zero' : 'hex'}">${hex}</span> `;
+                            asciiLine += (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+                        }
+                    }
+                    const addr = (baseAddr + i).toString(16).padStart(8, '0').toUpperCase();
+                    html += `<span class="addr">${addr}</span>  ${hexLine.padEnd(16 * 3 + 18, ' ')} <span class="ascii">|${asciiLine.replace(/</g, '&lt;')}|</span>\n`;
+                }
+                hexDump.innerHTML = html;
+            }
+
+            function bindKernelEvents(k) {
+                k.onOutput = (text) => {
+                    consoleOut.innerHTML += formatANSI(text);
+                    consoleOut.scrollTop = consoleOut.scrollHeight;
+                };
+
+                k.onStateChange = (state) => {
+                    statusText.className = '';
+                    statusText.textContent = `Status: ${state.charAt(0).toUpperCase() + state.slice(1)}`;
+                    
+                    if (state === 'ready') statusText.classList.add('status-ready');
+                    else if (state === 'error') statusText.classList.add('status-error');
+                    else if (state === 'running') statusText.classList.add('status-running');
+                    else if (state === 'yielded') statusText.classList.add('status-yielded');
+                    
+                    cyclesText.textContent = `Cycles: ${k.cycles}`;
+                    if (k.innerSanctum) {
+                        const pages = k.innerSanctum.exports.mem.buffer.byteLength / 65536;
+                        memText.textContent = `Pages: ${pages}/256`;
+                    }
+                    
+                    updatePageMap();
+                    updateHexDump();
+                };
+            }
+
+            async function init() {
+                kernel = await window.WASMKernel.boot();
+                bindKernelEvents(kernel);
+            }
+
+            btnRun.addEventListener('click', async () => {
+                consoleOut.innerHTML = '<span style="color: var(--fg-base)">--- Kernel Execution Started ---\n</span>';
+                if (memoryInterval) clearInterval(memoryInterval);
+                memoryInterval = setInterval(updateHexDump, 100);
+
+                try {
+                    await window.WASMKernel.exec(editor.value);
+                } finally {
+                    clearInterval(memoryInterval);
+                    updateHexDump();
+                }
+            });
+
+            btnStep.addEventListener('click', async () => {
+                if (!kernel.instance || kernel.yielded === false && kernel.cycles === 0) {
+                    await kernel.compileAndLoad(editor.value);
+                }
+                kernel.stepMode = true;
+                kernel.resume();
+            });
+
+            btnReset.addEventListener('click', async () => {
+                consoleOut.innerHTML = '<span style="color: var(--fg-base)">--- Kernel Reset ---\n</span>';
+                kernel = await window.WASMKernel.boot();
+                bindKernelEvents(kernel);
+            });
+
+            btnSnapshot.addEventListener('click', () => {
+                if (snapshotBuffer) {
+                    kernel.restore(snapshotBuffer);
+                    updateHexDump();
+                    btnSnapshot.textContent = 'Take Snapshot';
+                    snapshotBuffer = null;
+                } else {
+                    snapshotBuffer = kernel.snapshot();
+                    btnSnapshot.textContent = 'Restore Snapshot';
+                    kernel.onOutput('\x1b[36m[KERNEL] Memory snapshot taken.\x1b[0m\n');
+                }
+            });
+
+            editor.addEventListener('keydown', function(e) {
+                if (e.key == 'Tab') {
+                    e.preventDefault();
+                    var start = this.selectionStart;
+                    var end = this.selectionEnd;
+                    this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+                    this.selectionStart = this.selectionEnd = start + 4;
+                }
+            });
+
+            init();
+        }
+    </script>
+
+    <header>
+        <h1>WASM-Kernel</h1>
+        <div class="header-controls">
+            <button onclick="alert('WASM-Kernel v2.0\n\n- Inner Sanctum Runtime\n- Instruction-Level Cycle Accounting\n- Memory Page Map Isolation\n- postMessage API Integration')">Help</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="panel">
+            <div class="panel-header">Userland (WAT Editor)</div>
+            <textarea id="editor" spellcheck="false"></textarea>
+        </div>
+        <div class="panel right-panels">
+            <div class="output-panel">
+                <div class="panel-header">Outer Shell (Console)</div>
+                <div id="console-out" class="console-output">Ready...</div>
+            </div>
+            <div class="memory-panel">
+                <div class="panel-header">Inner Sanctum Memory Inspector</div>
+                <div id="page-map" class="page-map"></div>
+                <div id="hex-dump" class="hex-dump"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="status-bar">
+            <span id="status-text" class="status-ready">Status: Booting...</span>
+            <span id="cycles-text">Cycles: 0</span>
+            <span id="mem-text">Pages: 0/256</span>
+        </div>
+        <div class="toolbar">
+            <button id="btn-snapshot">Take Snapshot</button>
+            <button id="btn-reset">Reset</button>
+            <button id="btn-step">Step</button>
+            <button id="btn-run" class="primary">Execute Userland</button>
+        </div>
+    </footer>
+</body>
+</html>
+

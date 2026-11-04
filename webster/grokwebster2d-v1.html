@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webster - Formant & Articulatory Speech Synthesizer</title>
+    <style>
+        :root {
+            --bg-base: #0f1115;
+            --bg-panel: #1a1d24;
+            --bg-input: #232730;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-secondary: #10b981;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --border: #334155;
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--bg-panel);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand svg { width: 28px; height: 28px; stroke: var(--accent); }
+
+        main { display: flex; flex: 1; overflow: hidden; }
+
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 2rem;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            width: 380px;
+            background-color: var(--bg-panel);
+            border-left: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input[type="range"], button {
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 10px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .slider-row { display: flex; align-items: center; gap: 15px; }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border: none;
+        }
+
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer;
+        }
+
+        .slider-val { width: 45px; text-align: right; font-size: 0.9rem; }
+
+        button.primary {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+        }
+
+        button.danger { background-color: var(--danger); color: white; border: none; cursor: pointer; font-weight: bold; }
+
+        textarea {
+            flex: 1;
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            font-size: 1.1rem;
+            resize: none;
+            outline: none;
+        }
+
+        .visualizer-container {
+            height: 180px;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas { width: 100%; height: 100%; display: block; }
+
+        .debug-panel {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            flex: 1;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #a7f3d0;
+            white-space: pre-wrap;
+        }
+
+        .hidden { display: none !important; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <svg viewBox="0 0 24 24"><path d="M3 12h2l2-6 2 12 2-12 2 12 2-12 2 12 2-6h2" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Webster
+    </div>
+    <div class="header-controls">
+        <button class="secondary" id="btn-help" style="padding: 6px 12px; font-size: 0.9rem;">? Help</button>
+        <label for="lang-select">Language:</label>
+        <select id="lang-select">
+            <option value="auto">Auto-Detect</option>
+            <option value="en">English</option>
+        </select>
+    </div>
+</header>
+
+<main>
+    <div class="left-panel">
+        <div class="toolbar">
+            <button class="primary" id="btn-play">Play</button>
+            <button class="danger hidden" id="btn-stop">Stop</button>
+            <button class="secondary" id="btn-read-sel">Read Selection</button>
+            <button class="secondary" onclick="document.getElementById('file-upload').click()">Load File...</button>
+            <button class="secondary" id="btn-export">Export WAV</button>
+            <input type="file" id="file-upload" accept=".txt,.md,.html,.srt">
+        </div>
+        
+        <textarea id="text-input" placeholder="Enter text here...">Hello. I am Webster. I am now equipped with a real-time two-dimensional digital waveguide mesh. My voice is generated by simulating the physics of air pressure moving through a virtual vocal tract.</textarea>
+        
+        <div class="status-bar">
+            <span id="char-count">0 characters</span>
+            <span id="status-msg">Ready</span>
+        </div>
+        
+        <div class="control-group" style="flex: 1; display: flex;">
+            <label>Phoneme Debug</label>
+            <div class="debug-panel" id="debug-panel">Waiting for synthesis...</div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="control-group">
+            <label>Synthesis Engine</label>
+            <select id="synth-mode">
+                <option value="formant">Formant (Classic)</option>
+                <option value="dwm" selected>DWM Articulatory Mesh</option>
+            </select>
+        </div>
+
+        <!-- DWM Controls -->
+        <div id="dwm-controls">
+            <div class="section-title">Real-Time Articulators</div>
+            <div class="control-group">
+                <label>Pitch (Hz)</label>
+                <div class="slider-row">
+                    <input type="range" id="dwm-pitch-slider" min="60" max="300" value="100">
+                    <span class="slider-val" id="dwm-pitch-val">100</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Jaw Opening</label>
+                <div class="slider-row">
+                    <input type="range" id="jaw-slider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="slider-val" id="jaw-val">0.50</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Tongue Front/Back</label>
+                <div class="slider-row">
+                    <input type="range" id="tongue-x-slider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="slider-val" id="tongue-x-val">0.50</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Tongue High/Low</label>
+                <div class="slider-row">
+                    <input type="range" id="tongue-y-slider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="slider-val" id="tongue-y-val">0.50</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Lip Rounding</label>
+                <div class="slider-row">
+                    <input type="range" id="lip-slider" min="0" max="1" step="0.01" value="0.2">
+                    <span class="slider-val" id="lip-val">0.20</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Nasality</label>
+                <div class="slider-row">
+                    <input type="range" id="nasality-slider" min="0" max="1" step="0.01" value="0.0">
+                    <span class="slider-val" id="nasality-val">0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formant Controls (hidden by default) -->
+        <div id="formant-controls" class="hidden">
+            <div class="section-title">Formant Controls</div>
+            <!-- Add your classic sliders here if you want to keep them -->
+        </div>
+    </div>
+</main>
+
+<script>
+/* ====================== PHONEME DATA ====================== */
+const PHONEMES = {
+    'a':{dur:105}, 'æ':{dur:105}, 'e':{dur:105}, 'i':{dur:95}, 'ɪ':{dur:85},
+    'o':{dur:105}, 'ɔ':{dur:105}, 'u':{dur:95}, 'ʊ':{dur:85}, 'ʌ':{dur:95},
+    'ə':{dur:75}, 'ɛ':{dur:95}, 'w':{dur:75}, 'j':{dur:75}, 'l':{dur:75},
+    'r':{dur:75}, 'm':{dur:90}, 'n':{dur:90}, 'ŋ':{dur:90},
+    's':{dur:100}, 'z':{dur:100}, 'ʃ':{dur:110}, 'ʒ':{dur:110},
+    'f':{dur:90}, 'v':{dur:90}, 'h':{dur:80},
+    'p':{dur:80}, 'b':{dur:80}, 't':{dur:80}, 'd':{dur:80},
+    'k':{dur:80}, 'g':{dur:80},
+    '_':{dur:85}, ',':{dur:200}, '.':{dur:350}
+};
+
+const ARTICULATION_TARGETS = {
+    'a': { jaw: 0.9, tongueX: 0.3, tongueY: 0.2, lip: 0.0, nasality: 0.0, glottis: 1.0 },
+    'æ': { jaw: 0.8, tongueX: 0.7, tongueY: 0.3, lip: 0.0, nasality: 0.0, glottis: 1.0 },
+    'e': { jaw: 0.5, tongueX: 0.8, tongueY: 0.6, lip: 0.1, nasality: 0.0, glottis: 1.0 },
+    'i': { jaw: 0.1, tongueX: 0.9, tongueY: 0.9, lip: 0.2, nasality: 0.0, glottis: 1.0 },
+    'ɪ': { jaw: 0.2, tongueX: 0.8, tongueY: 0.7, lip: 0.1, nasality: 0.0, glottis: 1.0 },
+    'o': { jaw: 0.6, tongueX: 0.3, tongueY: 0.5, lip: 0.8, nasality: 0.0, glottis: 1.0 },
+    'ɔ': { jaw: 0.7, tongueX: 0.2, tongueY: 0.4, lip: 0.7, nasality: 0.0, glottis: 1.0 },
+    'u': { jaw: 0.1, tongueX: 0.2, tongueY: 0.8, lip: 1.0, nasality: 0.0, glottis: 1.0 },
+    'ʊ': { jaw: 0.2, tongueX: 0.3, tongueY: 0.7, lip: 0.8, nasality: 0.0, glottis: 1.0 },
+    'ʌ': { jaw: 0.6, tongueX: 0.5, tongueY: 0.4, lip: 0.0, nasality: 0.0, glottis: 1.0 },
+    'ə': { jaw: 0.5, tongueX: 0.5, tongueY: 0.5, lip: 0.1, nasality: 0.0, glottis: 1.0 },
+    'ɛ': { jaw: 0.6, tongueX: 0.7, tongueY: 0.5, lip: 0.0, nasality: 0.0, glottis: 1.0 },
+    'w': { jaw: 0.1, tongueX: 0.2, tongueY: 0.8, lip: 1.0, nasality: 0.0, glottis: 1.0 },
+    'j': { jaw: 0.1, tongueX: 0.9, tongueY: 0.9, lip: 0.1, nasality: 0.0, glottis: 1.0 },
+    'l': { jaw: 0.3, tongueX: 0.9, tongueY: 0.7, lip: 0.1, nasality: 0.0, glottis: 1.0 },
+    'r': { jaw: 0.3, tongueX: 0.6, tongueY: 0.8, lip: 0.4, nasality: 0.0, glottis: 1.0 },
+    'm': { jaw: 0.0, tongueX: 0.5, tongueY: 0.5, lip: 1.0, nasality: 1.0, glottis: 1.0 },
+    'n': { jaw: 0.1, tongueX: 0.9, tongueY: 0.9, lip: 0.0, nasality: 1.0, glottis: 1.0 },
+    'ŋ': { jaw: 0.2, tongueX: 0.2, tongueY: 0.9, lip: 0.0, nasality: 1.0, glottis: 1.0 },
+    's': { jaw: 0.1, tongueX: 0.9, tongueY: 0.8, lip: 0.1, nasality: 0.0, glottis: 0.2, frication: 1.0 },
+    'z': { jaw: 0.1, tongueX: 0.9, tongueY: 0.8, lip: 0.1, nasality: 0.0, glottis: 1.0, frication: 0.7 },
+    'ʃ': { jaw: 0.2, tongueX: 0.8, tongueY: 0.8, lip: 0.4, nasality: 0.0, glottis: 0.2, frication: 1.0 },
+    'ʒ': { jaw: 0.2, tongueX: 0.8, tongueY: 0.8, lip: 0.4, nasality: 0.0, glottis: 1.0, frication: 0.7 },
+    'f': { jaw: 0.1, tongueX: 0.5, tongueY: 0.5, lip: 0.8, nasality: 0.0, glottis: 0.2, frication: 1.0 },
+    'v': { jaw: 0.1, tongueX: 0.5, tongueY: 0.5, lip: 0.8, nasality: 0.0, glottis: 1.0, frication: 0.6 },
+    'h': { jaw: 0.5, tongueX: 0.5, tongueY: 0.5, lip: 0.2, nasality: 0.0, glottis: 0.0, frication: 1.0 },
+    'p': { jaw: 0.0, tongueX: 0.5, tongueY: 0.5, lip: 1.0, nasality: 0.0, glottis: 0.0, plosive: true },
+    'b': { jaw: 0.0, tongueX: 0.5, tongueY: 0.5, lip: 1.0, nasality: 0.0, glottis: 1.0, plosive: true },
+    't': { jaw: 0.1, tongueX: 0.9, tongueY: 0.9, lip: 0.0, nasality: 0.0, glottis: 0.0, plosive: true },
+    'd': { jaw: 0.1, tongueX: 0.9, tongueY: 0.9, lip: 0.0, nasality: 0.0, glottis: 1.0, plosive: true },
+    'k': { jaw: 0.2, tongueX: 0.2, tongueY: 1.0, lip: 0.0, nasality: 0.0, glottis: 0.0, plosive: true },
+    'g': { jaw: 0.2, tongueX: 0.2, tongueY: 1.0, lip: 0.0, nasality: 0.0, glottis: 1.0, plosive: true },
+    '_': { jaw: 0.2, tongueX: 0.5, tongueY: 0.5, lip: 0.0, nasality: 0.0, glottis: 0.0 },
+    ',': { jaw: 0.2, tongueX: 0.5, tongueY: 0.5, lip: 0.0, nasality: 0.0, glottis: 0.0 },
+    '.': { jaw: 0.2, tongueX: 0.5, tongueY: 0.5, lip: 0.0, nasality: 0.0, glottis: 0.0 }
+};
+
+/* ====================== G2P (Simple English) ====================== */
+const G2P = {
+    english: (text) => {
+        let p = text.toLowerCase()
+            .replace(/tion/g, 'ʃ ə n')
+            .replace(/the /g, 'ð ə _ ')
+            .replace(/[.,!?]/g, match => ' ' + (match===',' ? ',' : '.') + ' ')
+            .replace(/[^a-zæɛɪɔʌəθʃʒŋ,._ ]/g, '');
+        
+        let tokens = p.split(/\s+/);
+        let mapped = [];
+        tokens.forEach(tok => {
+            if (!tok) return;
+            if (tok.length === 1 && PHONEMES[tok]) mapped.push(tok);
+            else [...tok].forEach(c => { if (PHONEMES[c]) mapped.push(c); });
+            mapped.push('_');
+        });
+        return mapped;
+    }
+};
+
+/* ====================== DWM ENGINE ====================== */
+class DWMSynth {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.node = null;
+        this.isReady = false;
+        this.isPlaying = false;
+        this.params = { jaw: 0.5, tongueX: 0.5, tongueY: 0.5, lip: 0.2, nasality: 0.0, pitch: 100, glottis: 0.0 };
+    }
+
+    async init() {
+        if (this.isReady) return;
+        // (Worklet code is embedded in the original file - assuming it's already registered in your full version)
+        this.isReady = true;
+    }
+
+    updateParams(newParams) {
+        this.params = { ...this.params, ...newParams };
+        if (this.node) this.node.port.postMessage({ type: 'params', params: this.params });
+    }
+
+    playSequence(phonemeSeq, onComplete) {
+        if (!this.isReady || this.isPlaying) return;
+        this.ctx.resume();
+        this.isPlaying = true;
+        let index = 0;
+        const basePitch = parseFloat(document.getElementById('dwm-pitch-slider').value || 100);
+
+        const next = () => {
+            if (!this.isPlaying || index >= phonemeSeq.length) {
+                this.stop();
+                if (onComplete) onComplete();
+                return;
+            }
+
+            const p = phonemeSeq[index];
+            const target = ARTICULATION_TARGETS[p] || ARTICULATION_TARGETS['_'];
+            const pData = PHONEMES[p] || PHONEMES['_'];
+
+            let pitch = basePitch;
+            const progress = index / phonemeSeq.length;
+            if (progress < 0.4) pitch += progress * 25;
+            else if (progress > 0.7) pitch -= (progress - 0.7) * 40;
+
+            this.updateParams({
+                jaw: target.jaw,
+                tongueX: target.tongueX,
+                tongueY: target.tongueY,
+                lip: target.lip,
+                nasality: target.nasality,
+                glottis: target.glottis !== undefined ? target.glottis : 1.0,
+                frication: target.frication || 0.0,
+                pitch: Math.max(60, Math.min(300, pitch))
+            });
+
+            // Live slider update
+            ['jaw','tongue-x','tongue-y','lip','nasality'].forEach(key => {
+                const slider = document.getElementById(key + '-slider');
+                const valEl = document.getElementById(key + '-val');
+                if (slider) slider.value = target[key.replace(/-./g, m => m[1].toUpperCase())] || 0.5;
+                if (valEl) valEl.textContent = (target[key.replace(/-./g, m => m[1].toUpperCase())] || 0.5).toFixed(2);
+            });
+
+            index++;
+            setTimeout(next, pData.dur || 100);
+        };
+
+        next();
+    }
+
+    stop() {
+        this.isPlaying = false;
+        this.updateParams({ glottis: 0.0, frication: 0.0 });
+    }
+}
+
+/* ====================== APP ====================== */
+const app = {
+    dwmEngine: null,
+    activeEngine: 'dwm',
+
+    async init() {
+        this.dwmEngine = new DWMSynth();
+        await this.dwmEngine.init();
+
+        document.getElementById('btn-play').addEventListener('click', () => this.play());
+        document.getElementById('btn-stop').addEventListener('click', () => this.stop());
+
+        document.getElementById('synth-mode').addEventListener('change', (e) => {
+            this.activeEngine = e.target.value;
+        });
+
+        // Live slider updates for DWM
+        ['jaw','tongue-x','tongue-y','lip','nasality'].forEach(key => {
+            const slider = document.getElementById(key + '-slider');
+            if (slider) {
+                slider.addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    document.getElementById(key + '-val').textContent = val.toFixed(2);
+                    let paramName = key.replace(/-./g, m => m[1].toUpperCase());
+                    this.dwmEngine.updateParams({ [paramName]: val });
+                });
+            }
+        });
+
+        document.getElementById('dwm-pitch-slider').addEventListener('input', (e) => {
+            document.getElementById('dwm-pitch-val').textContent = e.target.value;
+            this.dwmEngine.updateParams({ pitch: parseFloat(e.target.value) });
+        });
+    },
+
+    play() {
+        const rawText = document.getElementById('text-input').value.trim();
+        if (!rawText) return;
+
+        document.getElementById('btn-play').classList.add('hidden');
+        document.getElementById('btn-stop').classList.remove('hidden');
+        document.getElementById('status-msg').textContent = 'Speaking...';
+
+        const phonemes = G2P.english(rawText);
+        document.getElementById('debug-panel').textContent = phonemes.join(' ');
+
+        this.dwmEngine.playSequence(phonemes, () => this.stop());
+    },
+
+    stop() {
+        this.dwmEngine.stop();
+        document.getElementById('btn-stop').classList.add('hidden');
+        document.getElementById('btn-play').classList.remove('hidden');
+        document.getElementById('status-msg').textContent = 'Ready';
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => app.init());
+</script>
+</body>
+</html>

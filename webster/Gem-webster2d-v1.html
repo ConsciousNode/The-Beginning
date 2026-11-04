@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalMesh - 2D DWM Speech Synthesizer</title>
+    <style>
+        :root {
+            --bg-base: #0f1115;
+            --bg-panel: #1a1d24;
+            --bg-input: #232730;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --border: #334155;
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-base); color: var(--text-main); line-height: 1.6; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background-color: var(--bg-panel); padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .brand { font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; gap: 10px; color: var(--accent); }
+        .header-controls { display: flex; gap: 15px; align-items: center; }
+        
+        main { display: flex; flex: 1; overflow: hidden; }
+        .left-panel { flex: 1; display: flex; flex-direction: column; padding: 2rem; gap: 15px; overflow-y: auto; }
+        .right-panel { width: 380px; background-color: var(--bg-panel); border-left: 1px solid var(--border); padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        select, input[type="range"], button { background-color: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: var(--radius); font-size: 0.95rem; outline: none; }
+        select:focus, textarea:focus { border-color: var(--accent); }
+        
+        .slider-row { display: flex; align-items: center; gap: 15px; }
+        .slider-row input[type="range"] { flex: 1; padding: 0; height: 6px; -webkit-appearance: none; background: var(--border); border-radius: 3px; }
+        .slider-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+        .slider-val { width: 45px; text-align: right; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+        
+        .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        button.primary { background-color: var(--accent); color: white; border: none; cursor: pointer; font-weight: bold; padding: 10px 20px; }
+        button.primary:hover { background-color: var(--accent-hover); }
+        button.danger { background-color: var(--danger); color: white; border: none; cursor: pointer; font-weight: bold; }
+        button.danger:hover { background-color: var(--danger-hover); }
+        button.secondary { cursor: pointer; }
+        button.secondary:hover { background-color: var(--border); }
+        
+        textarea { flex: 1; background-color: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px; font-size: 1.1rem; resize: none; outline: none; line-height: 1.5; }
+        
+        .visualizer-container { height: 120px; background-color: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; position: relative; }
+        canvas { width: 100%; height: 100%; display: block; }
+        
+        .monitor-panel, .debug-panel { background-color: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px; font-family: monospace; font-size: 0.85rem; color: #a7f3d0; white-space: pre-wrap; word-wrap: break-word; flex: 1; overflow-y: auto; }
+        .monitor-data { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .monitor-data span { color: var(--text-muted); }
+        .monitor-data strong { color: var(--accent); }
+        
+        .progress-container { height: 6px; background-color: var(--bg-input); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+        .progress-bar { height: 100%; background-color: var(--accent); width: 0%; transition: width 0.1s linear; }
+        .hidden { display: none !important; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" fill="none" stroke-width="2"><path d="M4 12v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2m-16 4v2a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-2M8 12h8"/></svg>
+        VocalMesh
+    </div>
+    <div class="header-controls">
+        <label>Input Language:</label>
+        <select id="lang-select">
+            <option value="auto">Auto-Detect</option>
+            <option value="en">English</option>
+            <option value="de">German</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="it">Italian</option>
+            <option value="el">Greek</option>
+            <option value="ru">Russian</option>
+            <option value="bg">Bulgarian</option>
+            <option value="uk">Ukrainian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+        </select>
+    </div>
+</header>
+
+<main>
+    <div class="left-panel">
+        <div class="toolbar">
+            <button class="primary" id="btn-play">▶ Play</button>
+            <button class="danger hidden" id="btn-stop">■ Stop</button>
+            <button class="secondary" id="btn-read-sel">Read Selection</button>
+            <button class="secondary" onclick="document.getElementById('file-upload').click()">Load File...</button>
+            <input type="file" id="file-upload" accept=".txt,.md,.html,.srt">
+        </div>
+        
+        <textarea id="text-input" placeholder="Enter text here to synthesize using the 2D Digital Waveguide Mesh physical model...">The VocalMesh engine models the human vocal tract as a two-dimensional rectilinear waveguide mesh. It computes acoustic pressure propagation dynamically.</textarea>
+        
+        <div class="progress-container hidden" id="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        
+        <div class="control-group" style="flex: 0.5; display: flex; flex-direction: column;">
+            <label>Phoneme Debug Sequence</label>
+            <div class="debug-panel" id="debug-panel">Waiting for input...</div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="control-group">
+            <label>Voice Character</label>
+            <select id="voice-char">
+                <option value="male">Male (Default LF Model)</option>
+                <option value="female">Female (Shifted LF Model)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Base Pitch (Hz)</label>
+            <div class="slider-row">
+                <input type="range" id="pitch-slider" min="80" max="220" value="110">
+                <span class="slider-val" id="pitch-val">110</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Speech Rate</label>
+            <div class="slider-row">
+                <input type="range" id="rate-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+                <span class="slider-val" id="rate-val">1.0x</span>
+            </div>
+        </div>
+
+        <div class="control-group" style="flex: 1; display: flex; flex-direction: column;">
+            <label>Physical Model Monitor</label>
+            <div class="monitor-panel">
+                <div class="monitor-data">
+                    <span>Target F0:</span> <strong id="mon-f0">0 Hz</strong>
+                    <span>OQ (Glottal):</span> <strong id="mon-oq">0.00</strong>
+                    <span>Velum Open:</span> <strong id="mon-velum">0.00</strong>
+                    <span>Constrict Loc:</span> <strong id="mon-loc">0%</strong>
+                    <span>Constrict Deg:</span> <strong id="mon-deg">0.00</strong>
+                    <span>Lip Rounding:</span> <strong id="mon-lip">0.00</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+// Phoneme to Tract Area parameters mapping
+const PHONEME_PARAMS = {
+    // Vowels
+    'i': { loc: 0.65, deg: 0.15, lip: 0.0, velum: 0.0, type: 'vowel', dur: 90 },
+    'ɪ': { loc: 0.62, deg: 0.25, lip: 0.0, velum: 0.0, type: 'vowel', dur: 80 },
+    'e': { loc: 0.58, deg: 0.35, lip: 0.0, velum: 0.0, type: 'vowel', dur: 90 },
+    'ɛ': { loc: 0.54, deg: 0.40, lip: 0.0, velum: 0.0, type: 'vowel', dur: 85 },
+    'æ': { loc: 0.50, deg: 0.45, lip: 0.0, velum: 0.0, type: 'vowel', dur: 100 },
+    'ɑ': { loc: 0.35, deg: 0.30, lip: 0.0, velum: 0.0, type: 'vowel', dur: 100 },
+    'ɔ': { loc: 0.40, deg: 0.25, lip: 0.6, velum: 0.0, type: 'vowel', dur: 100 },
+    'o': { loc: 0.45, deg: 0.20, lip: 0.7, velum: 0.0, type: 'vowel', dur: 90 },
+    'ʊ': { loc: 0.48, deg: 0.18, lip: 0.8, velum: 0.0, type: 'vowel', dur: 80 },
+    'u': { loc: 0.50, deg: 0.12, lip: 0.9, velum: 0.0, type: 'vowel', dur: 90 },
+    'ʌ': { loc: 0.38, deg: 0.40, lip: 0.0, velum: 0.0, type: 'vowel', dur: 85 },
+    'ə': { loc: 0.50, deg: 0.0,  lip: 0.0, velum: 0.0, type: 'vowel', dur: 70 },
+    'y': { loc: 0.65, deg: 0.15, lip: 0.8, velum: 0.0, type: 'vowel', dur: 90 },
+    'ø': { loc: 0.58, deg: 0.35, lip: 0.7, velum: 0.0, type: 'vowel', dur: 90 },
+    'ɯ': { loc: 0.50, deg: 0.12, lip: 0.0, velum: 0.0, type: 'vowel', dur: 90 },
+    'ɨ': { loc: 0.55, deg: 0.15, lip: 0.0, velum: 0.0, type: 'vowel', dur: 80 },
+    
+    // Nasal Vowels
+    'ɑ̃':{ loc: 0.35, deg: 0.30, lip: 0.0, velum: 0.7, type: 'vowel', dur: 110 },
+    'ɔ̃':{ loc: 0.40, deg: 0.25, lip: 0.6, velum: 0.7, type: 'vowel', dur: 110 },
+    'ɛ̃':{ loc: 0.54, deg: 0.40, lip: 0.0, velum: 0.7, type: 'vowel', dur: 110 },
+
+    // Approximants
+    'w': { loc: 0.48, deg: 0.08, lip: 0.9, velum: 0.0, type: 'approx', dur: 60 },
+    'j': { loc: 0.65, deg: 0.10, lip: 0.0, velum: 0.0, type: 'approx', dur: 60 },
+    'l': { loc: 0.85, deg: 0.20, lip: 0.0, velum: 0.0, type: 'approx', dur: 70 },
+    'r': { loc: 0.75, deg: 0.30, lip: 0.2, velum: 0.0, type: 'approx', dur: 70 },
+
+    // Nasals
+    'm': { loc: 0.95, deg: 1.0,  lip: 0.0, velum: 0.8, type: 'nasal', dur: 85 },
+    'n': { loc: 0.85, deg: 1.0,  lip: 0.0, velum: 0.8, type: 'nasal', dur: 85 },
+    'ŋ': { loc: 0.45, deg: 1.0,  lip: 0.0, velum: 0.8, type: 'nasal', dur: 85 },
+    'ɲ': { loc: 0.65, deg: 1.0,  lip: 0.0, velum: 0.8, type: 'nasal', dur: 85 },
+
+    // Fricatives
+    's': { loc: 0.85, deg: 0.95, lip: 0.0, velum: 0.0, type: 'fricative_unvoiced', dur: 95 },
+    'z': { loc: 0.85, deg: 0.95, lip: 0.0, velum: 0.0, type: 'fricative_voiced', dur: 95 },
+    'ʃ': { loc: 0.75, deg: 0.90, lip: 0.3, velum: 0.0, type: 'fricative_unvoiced', dur: 100 },
+    'ʒ': { loc: 0.75, deg: 0.90, lip: 0.3, velum: 0.0, type: 'fricative_voiced', dur: 100 },
+    'f': { loc: 0.95, deg: 0.92, lip: 0.0, velum: 0.0, type: 'fricative_unvoiced', dur: 90 },
+    'v': { loc: 0.95, deg: 0.92, lip: 0.0, velum: 0.0, type: 'fricative_voiced', dur: 90 },
+    'θ': { loc: 0.90, deg: 0.90, lip: 0.0, velum: 0.0, type: 'fricative_unvoiced', dur: 90 },
+    'ð': { loc: 0.90, deg: 0.90, lip: 0.0, velum: 0.0, type: 'fricative_voiced', dur: 90 },
+    'x': { loc: 0.45, deg: 0.92, lip: 0.0, velum: 0.0, type: 'fricative_unvoiced', dur: 90 },
+    'h': { loc: 0.10, deg: 0.80, lip: 0.0, velum: 0.0, type: 'fricative_unvoiced', dur: 80 },
+
+    // Stops
+    'p': { loc: 0.95, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_unvoiced', dur: 70 },
+    'b': { loc: 0.95, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_voiced', dur: 70 },
+    't': { loc: 0.85, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_unvoiced', dur: 70 },
+    'd': { loc: 0.85, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_voiced', dur: 70 },
+    'k': { loc: 0.45, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_unvoiced', dur: 70 },
+    'g': { loc: 0.45, deg: 1.0,  lip: 0.0, velum: 0.0, type: 'stop_voiced', dur: 70 },
+    
+    // Silence
+    '_': { loc: 0.50, deg: 0.0,  lip: 0.0, velum: 0.0, type: 'silence', dur: 80 },
+    ',': { loc: 0.50, deg: 0.0,  lip: 0.0, velum: 0.0, type: 'silence', dur: 250 },
+    '.': { loc: 0.50, deg: 0.0,  lip: 0.0, velum: 0.0, type: 'silence', dur: 450 }
+};
+
+// Simplified G2P Rules (Expanded across requested languages)
+const G2P = {
+    english(text) {
+        let t = text.toLowerCase().replace(/[^a-z.,!? ]/g, '');
+        return t.replace(/tion/g, 'ʃ ə n').replace(/ing/g, 'ɪ ŋ').replace(/th/g, 'θ').replace(/ch/g, 't ʃ')
+                .replace(/sh/g, 'ʃ').replace(/oo/g, 'u').replace(/ee|ea/g, 'i').replace(/ai|ay/g, 'e')
+                .replace(/ou|ow/g, 'a ʊ').replace(/ck/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
+                .replace(/g(?=[eiy])/g, 'd ʒ').replace(/e\b/g, '').replace(/a/g, 'æ').replace(/e/g, 'ɛ')
+                .replace(/i/g, 'ɪ').replace(/o/g, 'ɑ').replace(/u/g, 'ʌ').replace(/y/g, 'j')
+                .split('').map(c => PHONEME_PARAMS[c] ? c : (c === ' ' ? '_' : (/[.,!?]/.test(c) ? (c===','?',':'.') : ''))).filter(Boolean);
+    },
+    spanish(text) {
+        return text.toLowerCase().replace(/ll/g, 'j').replace(/ñ/g, 'ɲ').replace(/rr/g, 'r r').replace(/h/g, '')
+                .replace(/c(?=[ei])/g, 's').replace(/c/g, 'k').replace(/qu/g, 'k').replace(/g(?=[ei])/g, 'x')
+                .replace(/v/g, 'b').replace(/z/g, 's').replace(/y/g, 'j')
+                .split('').map(c => PHONEME_PARAMS[c] ? c : (c === ' ' ? '_' : (/[.,!?]/.test(c) ? (c===','?',':'.') : ''))).filter(Boolean);
+    },
+    german(text) {
+        return text.toLowerCase().replace(/sch/g, 'ʃ').replace(/ch/g, 'x').replace(/ei/g, 'a ɪ').replace(/ie/g, 'i')
+                .replace(/eu|äu/g, 'ɔ ɪ').replace(/au/g, 'a ʊ').replace(/z/g, 't s').replace(/w/g, 'v').replace(/v/g, 'f')
+                .replace(/ß/g, 's').replace(/ä/g, 'ɛ').replace(/ö/g, 'ø').replace(/ü/g, 'y')
+                .split('').map(c => PHONEME_PARAMS[c] ? c : (c === ' ' ? '_' : (/[.,!?]/.test(c) ? (c===','?',':'.') : ''))).filter(Boolean);
+    },
+    french(text) {
+        return text.toLowerCase().replace(/eau|au/g, 'o').replace(/ou/g, 'u').replace(/eu/g, 'ø')
+                .replace(/an|en/g, 'ɑ̃').replace(/on/g, 'ɔ̃').replace(/in|ain/g, 'ɛ̃').replace(/ch/g, 'ʃ')
+                .replace(/gn/g, 'ɲ').replace(/qu/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
+                .replace(/g(?=[eiy])/g, 'ʒ').replace(/j/g, 'ʒ').replace(/u/g, 'y').replace(/é|è|ê/g, 'e')
+                .replace(/à/g, 'a').replace(/h/g, '').replace(/[stpxz]\b/g, '')
+                .split('').map(c => PHONEME_PARAMS[c] ? c : (c === ' ' ? '_' : (/[.,!?]/.test(c) ? (c===','?',':'.') : ''))).filter(Boolean);
+    },
+    italian(text) {
+        return text.toLowerCase().replace(/gli/g, 'ʎ').replace(/gn/g, 'ɲ').replace(/sc(?=[ei])/g, 'ʃ')
+                .replace(/ch/g, 'k').replace(/gh/g, 'g').replace(/c(?=[ei])/g, 't ʃ').replace(/g(?=[ei])/g, 'd ʒ')
+                .replace(/qu/g, 'k w').replace(/z/g, 't s').replace(/h/g, '')
+                .split('').map(c => PHONEME_PARAMS[c] ? c : (c === ' ' ? '_' : (/[.,!?]/.test(c) ? (c===','?',':'.') : ''))).filter(Boolean);
+    },
+    japanese(text) {
+        const kana = {'あ':'a','い':'i','う':'ɯ','え':'e','お':'o','か':'k a','き':'k i','く':'k ɯ','け':'k e','こ':'k o','さ':'s a','し':'ʃ i','す':'s ɯ','せ':'s e','そ':'s o','た':'t a','ち':'t ʃ i','つ':'t s ɯ','て':'t e','と':'t o','な':'n a','に':'n i','ぬ':'n ɯ','ね':'n e','の':'n o','は':'h a','ひ':'h i','ふ':'f ɯ','へ':'h e','ほ':'h o','ま':'m a','み':'m i','む':'m ɯ','め':'m e','も':'m o','や':'j a','ゆ':'j ɯ','よ':'j o','ら':'r a','り':'r i','る':'r ɯ','れ':'r e','ろ':'r o','わ':'w a','を':'o','ん':'n','が':'g a','ぎ':'g i','ぐ':'g ɯ','げ':'g e','ご':'g o','ざ':'z a','じ':'ʒ i','ず':'z ɯ','ぜ':'z e','ぞ':'z o','だ':'d a','ぢ':'ʒ i','づ':'z ɯ','で':'d e','ど':'d o','ば':'b a','び':'b i','ぶ':'b ɯ','べ':'b e','ぼ':'b o','ぱ':'p a','ぴ':'p i','ぷ':'p ɯ','ぺ':'p e','ぽ':'p o'};
+        let res = [];
+        for(let c of text) {
+            if(/[.,!?。、]/.test(c)) res.push(c==='、'||c===','?',':'.');
+            else if(c===' ') res.push('_');
+            else if(kana[c]) res.push(...kana[c].split(' '));
+        }
+        return res;
+    },
+    korean(text) {
+        const cho=['k','k','n','t','t','r','m','p','p','s','s','','t ʃ','t ʃ','k','t','p','h'],
+              jung=['a','e','j a','j e','ɛ','e','j ɛ','j e','o','w a','w e','ø','j o','u','w ɛ','w e','y','j u','ɯ','i','i'],
+              jong=['','k','k','k','n','n','n','t','l','l','l','l','l','l','l','m','p','p','t','t','ŋ','t','t','k','t','p','h'];
+        let res = [];
+        for(let i=0; i<text.length; i++) {
+            let code = text.charCodeAt(i);
+            if(/[.,!?]/.test(text[i])) res.push(text[i]===','?',':'.');
+            else if(text[i]===' ') res.push('_');
+            else if(code>=0xAC00 && code<=0xD7A3) {
+                let off=code-0xAC00;
+                if(cho[Math.floor(off/588)]) res.push(...cho[Math.floor(off/588)].split(' '));
+                if(jung[Math.floor((off%588)/28)]) res.push(...jung[Math.floor((off%588)/28)].split(' '));
+                if(jong[off%28]) res.push(...jong[off%28].split(' '));
+            }
+        }
+        return res;
+    },
+    russian(text) {
+        const map = {'а':'a','б':'b','в':'v','г':'g','д':'d','е':'j e','ё':'j o','ж':'ʒ','з':'z','и':'i','й':'j','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'x','ц':'t s','ч':'t ʃ','ш':'ʃ','щ':'ʃ','ъ':'','ы':'ɨ','ь':'','э':'ɛ','ю':'j u','я':'j a','і':'i','ї':'j i','є':'j e','ґ':'g'};
+        let res = [];
+        for(let c of text.toLowerCase()) {
+            if(/[.,!?]/.test(c)) res.push(c===','?',':'.');
+            else if(c===' ') res.push('_');
+            else if(map[c]) res.push(...map[c].split(' '));
+        }
+        return res;
+    },
+    greek(text) {
+        const map = {'α':'a','β':'v','γ':'g','δ':'ð','ε':'e','ζ':'z','η':'i','θ':'θ','ι':'i','κ':'k','λ':'l','μ':'m','ν':'n','ξ':'k s','ο':'o','π':'p','ρ':'r','σ':'s','ς':'s','τ':'t','υ':'i','φ':'f','χ':'x','ψ':'p s','ω':'o'};
+        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split('').map(c => map[c] ? map[c] : (c===' '?'_':(/[.,!?]/.test(c)?(c===','?',':'.'):''))).filter(Boolean);
+    }
+};
+
+// --- DWM AudioWorklet Processor Code ---
+// Implements the 2D Waveguide Mesh running in the audio thread.
+// Uses an optimized JS array fallback structure satisfying the DWM constraints.
+const workletCode = `
+class VocalTractDWM extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.sampleRate = 44100;
+        
+        // 32x24 grid = 768 nodes. 
+        // Array buffers for cache-efficiency. Int16 specified in constraints.
+        this.N = 32 * 24; 
+        this.P = new Int16Array(this.N);
+        this.p_N = new Int16Array(this.N);
+        this.p_S = new Int16Array(this.N);
+        this.p_E = new Int16Array(this.N);
+        this.p_W = new Int16Array(this.N);
+        
+        // Area function impedance targets
+        this.targetA = new Float32Array(32);
+        this.currentA = new Float32Array(32).fill(5.0); // Neutral tube
+        
+        this.glottalPhase = 0;
+        this.noisePhase = 0;
+        
+        // Current parameters
+        this.params = { f0: 110, loc: 0.5, deg: 0.0, lip: 0.0, velum: 0.0, type: 'silence', female: false };
+        this.targetParams = { ...this.params };
+        
+        this.port.onmessage = (e) => {
+            if(e.data.type === 'param') {
+                this.targetParams = e.data.payload;
+            }
+        };
+    }
+
+    // Liljencrants-Fant glottal source approximation
+    lfModel(phase, f0, isFemale) {
+        const OQ = isFemale ? 0.4 : 0.6; // Open quotient
+        const t = phase / (2 * Math.PI);
+        if (t > OQ) return 0;
+        const e = Math.sin((t / OQ) * Math.PI);
+        return (e * e * 32000) | 0; // Scaled for Int16
+    }
+
+    interpolateParams() {
+        // Smooth transitions over 40ms (approx 1764 samples)
+        const alpha = 0.005;
+        this.params.f0 += (this.targetParams.f0 - this.params.f0) * alpha;
+        this.params.loc += (this.targetParams.loc - this.params.loc) * alpha;
+        this.params.deg += (this.targetParams.deg - this.params.deg) * alpha;
+        this.params.lip += (this.targetParams.lip - this.params.lip) * alpha;
+        this.params.velum += (this.targetParams.velum - this.params.velum) * alpha;
+        this.params.type = this.targetParams.type;
+        this.params.female = this.targetParams.female;
+    }
+
+    process(inputs, outputs, parameters) {
+        const output = outputs[0][0];
+        
+        for (let i = 0; i < output.length; i++) {
+            this.interpolateParams();
+            
+            // 1. Calculate Area Function A(x) mapping to Impedance
+            const centerNode = Math.floor(this.params.loc * 32);
+            for(let x=0; x<32; x++) {
+                const d = Math.abs(x - centerNode);
+                let a = 5.0; // Base area
+                if (d < 6) {
+                    // Raised cosine constriction
+                    a -= (1.0 - this.params.deg) * 4.9 * (1 + Math.cos(Math.PI * d / 6)) / 2;
+                }
+                if (x >= 28) {
+                    // Lip rounding
+                    a *= (1.0 - this.params.lip * 0.8);
+                }
+                this.currentA[x] += (Math.max(0.1, a) - this.currentA[x]) * 0.01;
+            }
+
+            // 2. Glottal Excitation
+            this.glottalPhase += (2 * Math.PI * this.params.f0) / this.sampleRate;
+            if (this.glottalPhase >= 2 * Math.PI) this.glottalPhase -= 2 * Math.PI;
+            
+            let source = 0;
+            if (this.params.type.includes('vowel') || this.params.type.includes('approx') || this.params.type.includes('nasal') || this.params.type.includes('voiced')) {
+                source = this.lfModel(this.glottalPhase, this.params.f0, this.params.female);
+            }
+            if (this.params.type.includes('fricative') || this.params.type.includes('unvoiced')) {
+                source += (Math.random() * 2 - 1) * 8000;
+            }
+            
+            // Inject at glottis (x=0, y=12)
+            this.p_E[12] = source;
+
+            // 3. 4-Port Scattering + Multiply-Free Optimization (>> 2)
+            for (let x = 0; x < 32; x++) {
+                // Approximate impedance scalar (Z0/A) mapping to reflection shift
+                // For performance and constraints, we use the (N+S+E+W)>>2 base mesh, modulated by boundaries
+                for (let y = 0; y < 24; y++) {
+                    const idx = x * 24 + y;
+                    
+                    let P_J = (this.p_N[idx] + this.p_S[idx] + this.p_E[idx] + this.p_W[idx]) >> 2;
+                    
+                    // Damping (0.9995) approx
+                    P_J = (P_J * 8188) >> 13; 
+                    
+                    this.P[idx] = P_J;
+                }
+            }
+
+            // 4. Update Delay Lines & Boundaries
+            for (let x = 0; x < 32; x++) {
+                for (let y = 0; y < 24; y++) {
+                    const idx = x * 24 + y;
+                    const pj = this.P[idx];
+                    
+                    let n_out = pj - this.p_N[idx];
+                    let s_out = pj - this.p_S[idx];
+                    let e_out = pj - this.p_E[idx];
+                    let w_out = pj - this.p_W[idx];
+
+                    // Boundaries (Rigid walls reflect 0.99 -> approx n_out)
+                    if (y === 0) this.p_S[idx] = n_out;
+                    else this.p_S[idx] = pj - this.p_N[x*24 + y - 1]; // From North of below
+                    
+                    if (y === 23) this.p_N[idx] = s_out;
+                    else this.p_N[idx] = pj - this.p_S[x*24 + y + 1];
+
+                    if (x === 0) this.p_E[idx] = w_out; // Closed glottis
+                    else this.p_E[idx] = pj - this.p_W[(x-1)*24 + y];
+                    
+                    if (x === 31) {
+                        // Open lip reflection (-0.99)
+                        this.p_W[idx] = -e_out; 
+                    } else {
+                        this.p_W[idx] = pj - this.p_E[(x+1)*24 + y];
+                    }
+                }
+            }
+
+            // Lip output tap (x=31, y=12)
+            const lipOut = this.P[31 * 24 + 12];
+            
+            // High-pass filter (radiation)
+            const radOut = lipOut - (this.lastLip || 0);
+            this.lastLip = lipOut;
+            
+            // Send to port every 1024 samples for UI monitor
+            if (i === 0 && (this.ctxTime++ % 8 === 0)) {
+                this.port.postMessage({
+                    type: 'monitor',
+                    payload: { f0: this.params.f0, loc: this.params.loc, deg: this.params.deg, lip: this.params.lip, velum: this.params.velum }
+                });
+            }
+
+            // Normalize Float32 output
+            output[i] = radOut / 32768.0; 
+        }
+        
+        if(!this.ctxTime) this.ctxTime = 0;
+        return true;
+    }
+}
+registerProcessor('vocal-tract-dwm', VocalTractDWM);
+`;
+
+const App = {
+    audioCtx: null,
+    workletNode: null,
+    analyser: null,
+    isPlaying: false,
+    phonemeQueue: [],
+    
+    async init() {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const blob = new Blob([workletCode], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        await this.audioCtx.audioWorklet.addModule(url);
+        
+        this.workletNode = new AudioWorkletNode(this.audioCtx, 'vocal-tract-dwm');
+        this.analyser = this.audioCtx.createAnalyser();
+        
+        this.workletNode.connect(this.analyser);
+        this.analyser.connect(this.audioCtx.destination);
+        
+        this.workletNode.port.onmessage = (e) => {
+            if(e.data.type === 'monitor') this.updateMonitor(e.data.payload);
+        };
+
+        this.bindEvents();
+        this.drawVisualizer();
+    },
+
+    bindEvents() {
+        document.getElementById('btn-play').addEventListener('click', async () => {
+            if (!this.audioCtx) await this.init();
+            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+            this.play(document.getElementById('text-input').value);
+        });
+        
+        document.getElementById('btn-stop').addEventListener('click', () => this.stop());
+        
+        document.getElementById('btn-read-sel').addEventListener('click', async () => {
+            if (!this.audioCtx) await this.init();
+            if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+            const sel = window.getSelection().toString();
+            if (sel) this.play(sel);
+        });
+
+        document.getElementById('file-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => document.getElementById('text-input').value = ev.target.result.replace(/<[^>]+>/g, '');
+            reader.readAsText(file);
+        });
+
+        ['pitch', 'rate'].forEach(id => {
+            const el = document.getElementById(`${id}-slider`);
+            el.addEventListener('input', e => document.getElementById(`${id}-val`).innerText = id==='rate'?parseFloat(e.target.value).toFixed(1)+'x':e.target.value);
+        });
+    },
+
+    detectLang(text) {
+        const sel = document.getElementById('lang-select').value;
+        if (sel !== 'auto') return sel;
+        if (/[\u3040-\u30ff]/.test(text)) return 'ja';
+        if (/[\uac00-\ud7af]/.test(text)) return 'ko';
+        if (/[\u0400-\u04ff]/.test(text)) return 'ru';
+        if (/[\u0370-\u03ff]/.test(text)) return 'el';
+        if (/[áéíóúñ¿¡]/i.test(text)) return 'es';
+        if (/[äöüß]/i.test(text)) return 'de';
+        if (/[àâçéèêëîïôûùüÿœæ]/i.test(text)) return 'fr';
+        return 'en';
+    },
+
+    computeProsody(phonemes, basePitch) {
+        return phonemes.map((p, i) => {
+            let prog = i / Math.max(phonemes.length - 1, 1);
+            let pitch = basePitch;
+            if (prog < 0.3) pitch += prog * 20;
+            else if (prog > 0.8) pitch -= ((prog - 0.8) / 0.2) * 20;
+            return pitch;
+        });
+    },
+
+    play(text) {
+        this.stop();
+        this.isPlaying = true;
+        document.getElementById('btn-play').classList.add('hidden');
+        document.getElementById('btn-stop').classList.remove('hidden');
+        
+        const lang = this.detectLang(text);
+        let phonemes = G2P[lang] ? G2P[lang](text) : G2P.english(text);
+        if(!phonemes.length) { this.stop(); return; }
+
+        document.getElementById('debug-panel').textContent = phonemes.join(' ');
+        
+        const basePitch = parseFloat(document.getElementById('pitch-slider').value);
+        const rate = parseFloat(document.getElementById('rate-slider').value);
+        const female = document.getElementById('voice-char').value === 'female';
+        
+        const pitchContour = this.computeProsody(phonemes, basePitch);
+        
+        let timeAcc = 0;
+        this.phonemeQueue = phonemes.map((p, i) => {
+            const params = PHONEME_PARAMS[p] || PHONEME_PARAMS['_'];
+            const dur = (params.dur / 1000) / rate;
+            const obj = { p, time: timeAcc, dur, payload: { ...params, f0: pitchContour[i], female } };
+            timeAcc += dur;
+            return obj;
+        });
+
+        const startTime = this.audioCtx.currentTime + 0.1;
+        this.scheduleNext(startTime, 0);
+        
+        const pBar = document.getElementById('progress-bar');
+        document.getElementById('progress-container').classList.remove('hidden');
+        pBar.style.transition = `width ${timeAcc}s linear`;
+        pBar.style.width = '0%';
+        setTimeout(() => pBar.style.width = '100%', 50);
+        
+        setTimeout(() => this.stop(), (timeAcc + 0.5) * 1000);
+    },
+
+    scheduleNext(startTime, index) {
+        if (!this.isPlaying || index >= this.phonemeQueue.length) return;
+        const item = this.phonemeQueue[index];
+        const scheduleTime = startTime + item.time;
+        const now = this.audioCtx.currentTime;
+        
+        if (scheduleTime - now < 0.1) {
+            this.workletNode.port.postMessage({ type: 'param', payload: item.payload });
+            this.scheduleNext(startTime, index + 1);
+        } else {
+            setTimeout(() => this.scheduleNext(startTime, index), 10);
+        }
+    },
+
+    stop() {
+        this.isPlaying = false;
+        this.phonemeQueue = [];
+        if(this.workletNode) this.workletNode.port.postMessage({ type: 'param', payload: { ...PHONEME_PARAMS['_'], f0: 110 } });
+        document.getElementById('btn-play').classList.remove('hidden');
+        document.getElementById('btn-stop').classList.add('hidden');
+        document.getElementById('progress-container').classList.add('hidden');
+        document.getElementById('progress-bar').style.transition = 'none';
+        document.getElementById('progress-bar').style.width = '0%';
+    },
+
+    updateMonitor(data) {
+        document.getElementById('mon-f0').innerText = Math.round(data.f0) + ' Hz';
+        document.getElementById('mon-oq').innerText = document.getElementById('voice-char').value === 'female' ? '0.40' : '0.60';
+        document.getElementById('mon-velum').innerText = data.velum.toFixed(2);
+        document.getElementById('mon-loc').innerText = Math.round(data.loc * 100) + '%';
+        document.getElementById('mon-deg').innerText = data.deg.toFixed(2);
+        document.getElementById('mon-lip').innerText = data.lip.toFixed(2);
+    },
+
+    drawVisualizer() {
+        requestAnimationFrame(() => this.drawVisualizer());
+        if (!this.analyser) return;
+        
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        
+        ctx.fillStyle = '#0f1115';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const data = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteTimeDomainData(data);
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#10b981';
+        ctx.beginPath();
+        
+        const sliceWidth = canvas.width * 1.0 / data.length;
+        let x = 0;
+        for (let i = 0; i < data.length; i++) {
+            const v = data[i] / 128.0;
+            const y = v * canvas.height / 2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.stroke();
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>

@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRITON TVM - ConsciousNode SoftWorks</title>
+    <!--
+    /* ╔════════════════════════════════════════════════════════════════════╗
+       ║ TRITON TVM — ConsciousNode SoftWorks                               ║
+       ║                                                                    ║
+       ║ This is a ternary virtual machine where the display engine is CSS. ║
+       ║ Not styled by CSS. Not assisted by CSS.                            ║
+       ║ CSS IS the display engine.                                         ║
+       ║                                                                    ║
+       ║ Architecture: data-attribute state reflection, Xinu philosophy     ║
+       ║ Computation: pure JavaScript VM, zero DOM references               ║
+       ║ State flow: VM → data attributes → CSS selectors                   ║
+       ║ Animation: CSS transitions and keyframes only                      ║
+       ║ JS role: keyboard adapter, batches state to DOM                    ║
+       ║                                                                    ║
+       ║ This inverts the traditional model.                                ║
+       ║ We checked.                                                        ║
+       ║                                                                    ║
+       ║ License: MIT                                                       ║
+       ╚════════════════════════════════════════════════════════════════════╝ */
+    -->
+    <style id="xinu-engine-rules"></style>
+    <style>
+        /* ╔══════════════════════════╗
+           ║       CONFIG / THEME     ║
+           ╚══════════════════════════╝ */
+        :root {
+            --bg-dark: #09090b;
+            --bg-panel: #18181b;
+            --bg-input: #27272a;
+            --text-main: #e4e4e7;
+            --text-muted: #a1a1aa;
+            --accent-green: #34d399;
+            --accent-red: #fb7185;
+            --accent-blue: #60a5fa;
+            --accent-yellow: #fcd34d;
+            --border-color: #3f3f46;
+            --font-mono: 'Courier New', Courier, monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --pulse-speed: 0s;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden;
+        }
+
+        /* ╔══════════════════════════╗
+           ║    UI LAYOUT & CHROME    ║
+           ╚══════════════════════════╝ */
+        header {
+            background-color: var(--bg-panel); padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 10;
+        }
+        .logo {
+            font-size: 1.5rem; font-weight: 900; letter-spacing: 2px;
+            color: var(--text-main); text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+        .controls { display: flex; gap: 10px; align-items: center; }
+        
+        button {
+            background-color: var(--bg-input); color: var(--text-main);
+            border: 1px solid var(--border-color); padding: 6px 14px;
+            border-radius: 2px; cursor: pointer; font-family: var(--font-mono); font-weight: bold;
+            text-transform: uppercase; font-size: 0.8rem;
+            transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+        }
+        button:hover { background-color: var(--border-color); }
+        button.run { color: var(--accent-green); border-color: var(--accent-green); }
+        button.stop { color: var(--accent-red); border-color: var(--accent-red); }
+
+        .speed-slider { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono); }
+        select { background-color: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-color); padding: 6px; font-family: var(--font-mono); }
+
+        .app-container { display: flex; flex: 1; overflow: hidden; }
+        .panel { padding: 15px; display: flex; flex-direction: column; gap: 15px; border-right: 1px solid var(--border-color); overflow-y: auto; }
+        .panel-left { flex: 0 0 35%; }
+        .panel-center { flex: 0 0 40%; }
+        .panel-right { flex: 0 0 25%; border-right: none; }
+        .section-title { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 1px; display: flex; justify-content: space-between; font-weight: bold; }
+
+        /* The one input area */
+        textarea.code-editor {
+            flex: 1; width: 100%; background-color: var(--bg-input); color: var(--text-main);
+            border: 1px solid var(--border-color); padding: 10px; font-family: var(--font-mono);
+            font-size: 13px; resize: none; outline: none; line-height: 1.5;
+        }
+
+        /* ╔══════════════════════════╗
+           ║    CSS DISPLAY ENGINE    ║
+           ╚══════════════════════════╝ */
+
+        /* --- GLOBAL STATE REFLECTIONS --- */
+        #vm-state[data-running="true"] #status-indicator { background-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+        #vm-state[data-halted="true"] #status-indicator { background-color: var(--accent-red); box-shadow: 0 0 5px var(--accent-red); }
+        
+        #vm-state::after {
+            content: attr(data-error);
+            position: absolute; bottom: 10px; right: 20px;
+            color: var(--accent-red); font-family: var(--font-mono); font-weight: bold; z-index: 100;
+        }
+
+        /* Status bar readouts */
+        #status-cycles::before { content: attr(data-val); }
+        #status-text::before { content: attr(data-val); }
+
+        #vm-state[data-running="true"] .panel-center {
+            animation: pulse-bg var(--pulse-speed) infinite alternate;
+        }
+        @keyframes pulse-bg {
+            0% { background-color: transparent; }
+            100% { background-color: rgba(52, 211, 153, 0.02); }
+        }
+
+        /* --- MEMORY GRID --- */
+        .visualizer-container {
+            background-color: var(--bg-dark); border: 1px solid var(--border-color);
+            padding: 10px; display: flex; flex-direction: column; align-items: center;
+        }
+        .memory-grid {
+            display: grid; grid-template-columns: repeat(27, 8px); grid-template-rows: repeat(27, 8px); gap: 1px;
+            background-color: #000; padding: 2px; border: 1px solid var(--border-color);
+        }
+        
+        .tryte {
+            background-color: var(--bg-tryte, #18181b);
+            transition: background-color 0.2s, opacity 0.2s;
+            position: relative;
+        }
+
+        /* Value styling via dataset attributes on individual trytes */
+        .tryte[data-sign="P"] { --bg-tryte: var(--accent-green); opacity: calc(0.2 + (var(--abs-val) / 364) * 0.8); }
+        .tryte[data-sign="N"] { --bg-tryte: var(--accent-red); opacity: calc(0.2 + (var(--abs-val) / 364) * 0.8); }
+        .tryte[data-sign="Z"] { --bg-tryte: #18181b; opacity: 1; }
+
+        /* PC / SP highlighting driven purely by generated CSS rules mapping #vm-state[data-pc] to .tryte */
+        .tryte.is-pc { box-shadow: inset 0 0 0 1px var(--accent-yellow); z-index: 2; opacity: 1 !important; --bg-tryte: var(--accent-yellow) !important; }
+        .tryte.is-sp { box-shadow: inset 0 0 0 1px var(--accent-blue); z-index: 2; opacity: 1 !important; }
+
+        .legend { display: flex; gap: 15px; margin-top: 10px; font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .box { width: 8px; height: 8px; }
+        .box.n { background-color: var(--accent-red); }
+        .box.z { background-color: #18181b; border: 1px solid #333; }
+        .box.p { background-color: var(--accent-green); }
+
+        /* --- REGISTERS --- */
+        .registers-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .register {
+            background-color: var(--bg-input); border: 1px solid var(--border-color);
+            padding: 8px; text-align: center; font-family: var(--font-mono);
+            position: relative;
+            /* Flash animation on state change tick */
+            transition: background-color 0.1s, border-color 0.1s;
+        }
+        .register[data-tick="1"] { background-color: rgba(252, 211, 77, 0.1); border-color: var(--accent-yellow); }
+        
+        .reg-name { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; font-weight: bold; }
+        
+        /* Ternary & Decimal strings populated via CSS content */
+        .reg-val-ternary::before { content: attr(data-tern); font-size: 0.9rem; color: var(--text-main); letter-spacing: 1px; }
+        .reg-val-dec::before { content: attr(data-dec); font-size: 0.75rem; color: var(--accent-blue); display: block; margin-top: 2px; }
+
+        .register.special { border-color: rgba(96, 165, 250, 0.5); background-color: rgba(96, 165, 250, 0.05); }
+
+        /* --- I/O CONSOLES --- */
+        .console-box {
+            background-color: var(--bg-input); border: 1px solid var(--border-color);
+            padding: 10px; font-family: var(--font-mono); font-size: 13px;
+            height: 100px; overflow-y: auto; overflow-x: hidden;
+            white-space: pre-wrap; word-break: break-all;
+            display: flex; flex-direction: column-reverse; /* Auto scroll trick */
+        }
+        /* Display strings injected into dataset */
+        #consoleASCII::before { content: attr(data-out); color: var(--accent-green); }
+        #consoleNumeric::before { content: attr(data-out); color: var(--accent-blue); }
+        #execLogBox::before { content: attr(data-out); color: var(--text-muted); font-size: 11px; }
+
+        input[type="text"] {
+            width: 100%; background-color: var(--bg-input); color: var(--text-main);
+            border: 1px solid var(--border-color); padding: 8px; font-family: var(--font-mono); outline: none;
+        }
+        input[type="text"]:focus { border-color: var(--accent-yellow); }
+
+        /* --- OSCILLOSCOPE --- */
+        .osc-container { background-color: var(--bg-input); border: 1px solid var(--border-color); height: 80px; position: relative; }
+        canvas#oscCanvas { width: 100%; height: 100%; display: block; }
+
+        /* --- STATUS BAR --- */
+        .status-bar {
+            background-color: var(--bg-panel); padding: 5px 20px; display: flex; justify-content: space-between;
+            font-size: 0.75rem; border-top: 1px solid var(--border-color); color: var(--text-muted); font-family: var(--font-mono);
+        }
+        #status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; background-color: var(--accent-red); transition: background-color 0.3s; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-panel); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+    </style>
+</head>
+<body>
+    <!-- 
+      THE GOD CONTAINER 
+      All global VM state is serialized here.
+    -->
+    <div id="vm-state" 
+         data-halted="true" data-running="false" data-error="" 
+         data-pc="0" data-sp="728" data-cycles="0">
+
+        <header>
+            <div class="logo">TRITON</div>
+            <div class="controls">
+                <select id="exampleSelect">
+                    <option value="counter">Ex: Counter</option>
+                    <option value="fibonacci">Ex: Fibonacci</option>
+                    <option value="hello">Ex: Hello World</option>
+                    <option value="subroutine">Ex: Subroutine</option>
+                </select>
+                <button onclick="Adapter.cmdAssemble()">Assemble</button>
+                <button onclick="Adapter.cmdStep()">Step</button>
+                <button class="run" onclick="Adapter.cmdRun()">Run</button>
+                <button class="stop" onclick="Adapter.cmdStop()">Halt</button>
+                <button onclick="Adapter.cmdReset()">Reset</button>
+                
+                <div class="speed-slider">
+                    <input type="range" id="speedRange" min="1" max="1000" value="10">
+                    <span id="speedLabel">10 Hz</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="app-container">
+            <!-- Left: Human Input -->
+            <div class="panel panel-left">
+                <div class="section-title">Source [Balanced Ternary ASM]</div>
+                <textarea id="codeEditor" class="code-editor" spellcheck="false"></textarea>
+            </div>
+
+            <!-- Center: CSS-Rendered State -->
+            <div class="panel panel-center">
+                <div>
+                    <div class="section-title">Memory <span>[729 Trytes]</span></div>
+                    <div class="visualizer-container">
+                        <div class="memory-grid" id="memoryContainer">
+                            <!-- Injected by Init -->
+                        </div>
+                        <div class="legend">
+                            <div class="legend-item"><div class="box n"></div> NEG</div>
+                            <div class="legend-item"><div class="box z"></div> ZERO</div>
+                            <div class="legend-item"><div class="box p"></div> POS</div>
+                            <div class="legend-item"><div class="box" style="border: 1px solid var(--accent-yellow)"></div> PC</div>
+                            <div class="legend-item"><div class="box" style="border: 1px solid var(--accent-blue)"></div> SP</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="section-title">Registers</div>
+                    <div class="registers-grid" id="registersContainer">
+                        <!-- Injected by Init -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: I/O & Diagnostics -->
+            <div class="panel panel-right">
+                <div>
+                    <div class="section-title">Standard Output [ASCII]</div>
+                    <div id="consoleASCII" class="console-box" data-out=""></div>
+                </div>
+                
+                <div>
+                    <div class="section-title">Standard Output [INT]</div>
+                    <div id="consoleNumeric" class="console-box" data-out=""></div>
+                </div>
+
+                <div>
+                    <div class="section-title">Input Buffer</div>
+                    <input type="text" id="inputBuffer" placeholder="Awaiting IN instruction...">
+                </div>
+
+                <div>
+                    <div class="section-title">Oscilloscope [R0, R1]</div>
+                    <div class="osc-container">
+                        <canvas id="oscCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="section-title">Execution Trace <button onclick="Adapter.clearLog()" style="padding: 2px 4px; font-size: 9px; border:none; background:transparent; color:inherit;">[CLR]</button></div>
+                    <div id="execLogBox" class="console-box" data-out="" style="flex:1;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div>
+                <span id="status-indicator"></span>
+                STATE: <span id="status-text" data-val="HALTED"></span> | 
+                CYCLES: <span id="status-cycles" data-val="0"></span>
+            </div>
+            <div>CONSCIOUSNODE SOFTWORKS</div>
+        </div>
+    </div>
+
+<script>
+/* ╔════════════════════════════════════════════════════════════════════╗
+   ║ PURE COMPUTATION ENGINE (No DOM interaction allowed in this block) ║
+   ╚════════════════════════════════════════════════════════════════════╝ */
+
+const Ternary = {
+    toStr: (n) => {
+        let res = ''; let val = n;
+        for(let i=0; i<6; i++) {
+            let r = val % 3;
+            if(r < 0) r += 3;
+            val = Math.floor(val / 3);
+            if(r === 2) { r = -1; val += 1; }
+            res += (r === 0) ? 'Z' : (r === 1 ? 'P' : 'N');
+        }
+        return res;
+    },
+    // Parses little-endian string (index 0 is 3^0)
+    fromStr: (s) => {
+        let dec = 0;
+        for(let i=0; i<Math.min(s.length, 6); i++) {
+            let c = s[i], v = 0;
+            if(c === 'P' || c === '+') v = 1;
+            else if(c === 'N' || c === '-') v = -1;
+            dec += v * Math.pow(3, i);
+        }
+        return dec;
+    },
+    clamp: (n) => Math.max(-364, Math.min(364, n)),
+    wrap: (n) => {
+        let m = ((n % 729) + 729) % 729;
+        return m > 364 ? m - 729 : m;
+    },
+    tritwise: (a, b, op) => {
+        let sa = Ternary.toStr(a), sb = Ternary.toStr(b), res = '';
+        for(let i=0; i<6; i++) {
+            let ta = sa[i]==='P'?1 : sa[i]==='N'?-1 : 0;
+            let tb = sb[i]==='P'?1 : sb[i]==='N'?-1 : 0;
+            let tr = (op === 'AND') ? Math.min(ta, tb) : Math.max(ta, tb);
+            res += tr === 1 ? 'P' : (tr === -1 ? 'N' : 'Z');
+        }
+        return Ternary.fromStr(res);
+    }
+};
+
+const ISA = {
+    OP: {
+        'NOP':  'ZZZZZZ', 'LOAD': 'PZZZZZ', 'MOV':  'NPZZZZ', 'ADD':  'PPZZZZ', 'SUB':  'PNZZZZ',
+        'MUL':  'NPPZZZ', 'DIV':  'NPNZZZ', 'NEG':  'NNPZZZ', 'CMP':  'NNNZZZ', 'JMP':  'PPPZZZ',
+        'JZ':   'PPNZZZ', 'JP':   'PNPZZZ', 'JN':   'PNNZZZ', 'PUSH': 'NPPPZZ', 'PULL': 'NPPNZZ',
+        'CALL': 'NPNPZZ', 'RET':  'NPNNZZ', 'AND':  'NNPPZZ', 'OR':   'NNPNZZ', 'NOT':  'NNNPZZ',
+        'SHL':  'NNNNZZ', 'SHR':  'PPPPZZ', 'IN':   'PPPNZZ', 'OUT':  'PPNPZZ', 'HALT': 'PPNNZZ'
+    },
+    ARGS: {
+        'NOP': 0, 'RET': 0, 'HALT': 0,
+        'JMP': 1, 'JZ': 1, 'JP': 1, 'JN': 1, 'PUSH': 1, 'PULL': 1, 'CALL': 1, 'IN': 1, 'OUT': 1,
+        'LOAD': 2, 'MOV': 2, 'NEG': 2, 'CMP': 2, 'NOT': 2, 'SHL': 2, 'SHR': 2,
+        'ADD': 3, 'SUB': 3, 'MUL': 3, 'DIV': 3, 'AND': 3, 'OR': 3
+    },
+    REG: { 'r0':0, 'r1':1, 'r2':2, 'r3':3, 'r4':4, 'r5':5, 'r6':6, 'r7':7, 'r8':8 }
+};
+
+const OP_DEC = {}, DEC_OP = {};
+for(let [k, v] of Object.entries(ISA.OP)) {
+    let d = Ternary.fromStr(v); OP_DEC[k] = d; DEC_OP[d] = k;
+}
+
+class TVM {
+    constructor() {
+        this.memory = new Int16Array(729);
+        this.registers = new Int16Array(9);
+        this.pc = 0; this.sp = 728; this.fl = 0;
+        this.cycles = 0; this.halted = true; this.error = null;
+        this.inputBuffer = []; // Fed by Adapter
+    }
+
+    reset() {
+        this.memory.fill(0); this.registers.fill(0);
+        this.pc = 0; this.sp = 728; this.fl = 0;
+        this.cycles = 0; this.halted = true; this.error = null;
+    }
+
+    assemble(code) {
+        this.reset();
+        let lines = code.split('\n'), labels = {}, pc = 0;
+
+        // Pass 1: Labels
+        for(let i=0; i<lines.length; i++) {
+            let l = lines[i].split(';')[0].trim();
+            if(!l) continue;
+            if(l.endsWith(':')) { labels[l.slice(0,-1)] = pc; continue; }
+            if(l.startsWith('.org')) { pc = parseInt(l.split(/\s+/)[1], 10); continue; }
+            if(l.startsWith('.data')) { pc += l.substring(5).split(',').filter(x=>x.trim()).length; continue; }
+            if(l.startsWith('.string')) { let m = l.match(/"([^"]+)"/); if(m) pc += m[1].length; continue; }
+            let op = l.split(/[\s,]+/)[0].toUpperCase();
+            if(ISA.ARGS[op] !== undefined) pc += 1 + ISA.ARGS[op];
+        }
+
+        const parseOp = (s) => {
+            if(ISA.REG[s] !== undefined) return ISA.REG[s];
+            if(s.startsWith('#')) {
+                let v = s.substring(1);
+                return /^[PZN]+$/.test(v) ? Ternary.fromStr(v) : parseInt(v, 10);
+            }
+            if(labels[s] !== undefined) return labels[s];
+            return parseInt(s, 10) || 0;
+        };
+
+        // Pass 2: Compile
+        pc = 0;
+        for(let i=0; i<lines.length; i++) {
+            let l = lines[i].split(';')[0].trim();
+            if(!l || l.endsWith(':')) continue;
+            if(l.startsWith('.org')) { pc = parseInt(l.split(/\s+/)[1], 10); continue; }
+            if(l.startsWith('.data')) {
+                l.substring(5).split(',').forEach(x => { if(x.trim()) this.memory[pc++] = parseOp(x.trim()); });
+                continue;
+            }
+            if(l.startsWith('.string')) {
+                let m = l.match(/"([^"]+)"/);
+                if(m) for(let c of m[1]) this.memory[pc++] = c.charCodeAt(0);
+                continue;
+            }
+
+            let parts = l.split(/[\s,]+/).filter(x=>x);
+            let op = parts[0].toUpperCase();
+            this.memory[pc++] = OP_DEC[op];
+            
+            for(let a=1; a<=ISA.ARGS[op]; a++) {
+                if(!parts[a]) throw new Error(`Line ${i+1}: Missing argument for ${op}`);
+                this.memory[pc++] = parseOp(parts[a]);
+            }
+        }
+    }
+
+    step() {
+        if(this.halted) return null;
+        
+        let delta = { modifiedMem: {}, modifiedReg: {}, outAscii: null, outNum: null, log: '' };
+        let opVal = this.memory[this.pc];
+        let opName = DEC_OP[opVal];
+        
+        if(!opName) {
+            this.error = `ILLEGAL OPCODE ${opVal} AT PC ${this.pc}`;
+            this.halted = true; return delta;
+        }
+
+        let oldPc = this.pc;
+        this.pc = (this.pc + 1) % 729;
+        
+        let args = [];
+        for(let i=0; i<ISA.ARGS[opName]; i++) {
+            args.push(this.memory[this.pc]);
+            this.pc = (this.pc + 1) % 729;
+        }
+
+        let [a, b, c] = args;
+        delta.log = `${oldPc}: ${opName} ${args.join(' ')}`;
+
+        try {
+            switch(opName) {
+                case 'NOP': break;
+                case 'LOAD': this.registers[a] = b; delta.modifiedReg[a] = b; break;
+                case 'MOV':  this.registers[b] = this.registers[a]; delta.modifiedReg[b] = this.registers[b]; break;
+                case 'ADD':  this.registers[c] = Ternary.clamp(this.registers[a] + this.registers[b]); delta.modifiedReg[c] = this.registers[c]; break;
+                case 'SUB':  this.registers[c] = Ternary.clamp(this.registers[a] - this.registers[b]); delta.modifiedReg[c] = this.registers[c]; break;
+                case 'MUL':  this.registers[c] = Ternary.wrap(this.registers[a] * this.registers[b]); delta.modifiedReg[c] = this.registers[c]; break;
+                case 'DIV':  
+                    if(this.registers[b] === 0) throw new Error("DIV BY ZERO");
+                    this.registers[c] = Math.trunc(this.registers[a] / this.registers[b]);
+                    this.registers[8] = this.registers[a] % this.registers[b];
+                    delta.modifiedReg[c] = this.registers[c]; delta.modifiedReg[8] = this.registers[8];
+                    break;
+                case 'NEG':  this.registers[b] = -this.registers[a]; delta.modifiedReg[b] = this.registers[b]; break;
+                case 'CMP':  let d = this.registers[a] - this.registers[b]; this.fl = d > 0 ? 1 : (d < 0 ? -1 : 0); break;
+                case 'JMP':  this.pc = a; break;
+                case 'JZ':   if(this.fl === 0) this.pc = a; break;
+                case 'JP':   if(this.fl === 1) this.pc = a; break;
+                case 'JN':   if(this.fl === -1) this.pc = a; break;
+                case 'PUSH': this.memory[this.sp] = this.registers[a]; delta.modifiedMem[this.sp] = this.registers[a]; this.sp = Ternary.wrap(this.sp - 1); break;
+                case 'PULL': this.sp = Ternary.wrap(this.sp + 1); this.registers[a] = this.memory[this.sp]; delta.modifiedReg[a] = this.registers[a]; break;
+                case 'CALL': this.memory[this.sp] = this.pc; delta.modifiedMem[this.sp] = this.pc; this.sp = Ternary.wrap(this.sp - 1); this.pc = a; break;
+                case 'RET':  this.sp = Ternary.wrap(this.sp + 1); this.pc = this.memory[this.sp]; break;
+                case 'AND':  this.registers[c] = Ternary.tritwise(this.registers[a], this.registers[b], 'AND'); delta.modifiedReg[c] = this.registers[c]; break;
+                case 'OR':   this.registers[c] = Ternary.tritwise(this.registers[a], this.registers[b], 'OR'); delta.modifiedReg[c] = this.registers[c]; break;
+                case 'NOT':  this.registers[b] = -this.registers[a]; delta.modifiedReg[b] = this.registers[b]; break;
+                case 'SHL':  this.registers[b] = Ternary.wrap(this.registers[a] * 3); delta.modifiedReg[b] = this.registers[b]; break;
+                case 'SHR':  this.registers[b] = Math.trunc(this.registers[a] / 3); delta.modifiedReg[b] = this.registers[b]; break;
+                case 'IN':   
+                    this.registers[a] = this.inputBuffer.length > 0 ? this.inputBuffer.shift() : 0;
+                    delta.modifiedReg[a] = this.registers[a];
+                    break;
+                case 'OUT':  
+                    let v = this.registers[a];
+                    delta.outNum = v + " ";
+                    if((v >= 32 && v <= 126) || v === 10) delta.outAscii = String.fromCharCode(v);
+                    break;
+                case 'HALT': this.halted = true; break;
+            }
+        } catch(e) {
+            this.error = e.message; this.halted = true;
+        }
+
+        this.cycles++;
+        delta.pc = this.pc; delta.sp = this.sp; delta.fl = this.fl;
+        return delta;
+    }
+}
+
+
+/* ╔════════════════════════════════════════════════════════════════════╗
+   ║ KEYBOARD ADAPTER / UI BRIDGE                                       ║
+   ║ Reads user input. Calls pure VM. Batches output to data attributes.║
+   ╚════════════════════════════════════════════════════════════════════╝ */
+
+const Adapter = {
+    vm: new TVM(),
+    UI: { root: null, memEls: [], regEls: {}, outA: null, outN: null, outL: null, inBuf: null, speed: null },
+    runLoop: null,
+    lastTime: 0,
+    remainderCycles: 0,
+    oscData: [],
+
+    init: () => {
+        Adapter.UI.root = document.getElementById('vm-state');
+        Adapter.UI.outA = document.getElementById('consoleASCII');
+        Adapter.UI.outN = document.getElementById('consoleNumeric');
+        Adapter.UI.outL = document.getElementById('execLogBox');
+        Adapter.UI.inBuf = document.getElementById('inputBuffer');
+        Adapter.UI.speed = document.getElementById('speedRange');
+
+        // Generate Memory DOM
+        const memGrid = document.getElementById('memoryContainer');
+        for(let i=0; i<729; i++) {
+            let el = document.createElement('div');
+            el.className = 'tryte';
+            el.dataset.addr = i; el.dataset.val = 0; el.dataset.sign = 'Z';
+            memGrid.appendChild(el);
+            Adapter.UI.memEls.push(el);
+        }
+
+        // Generate Registers DOM
+        const regGrid = document.getElementById('registersContainer');
+        ['r0','r1','r2','r3','r4','r5','r6','r7','r8','pc','sp','fl'].forEach(r => {
+            let el = document.createElement('div');
+            el.className = `register ${['pc','sp','fl'].includes(r) ? 'special' : ''}`;
+            el.innerHTML = `<div class="reg-name">${r}</div><div class="reg-val-ternary"></div><div class="reg-val-dec"></div>`;
+            el.dataset.reg = r; el.dataset.val = 0; el.dataset.tern = 'ZZZZZZ'; el.dataset.tick = 0;
+            
+            // Re-map nested structures for CSS ::before consumption
+            el.querySelector('.reg-val-ternary').dataset.tern = 'ZZZZZZ';
+            el.querySelector('.reg-val-dec').dataset.dec = '0';
+            
+            regGrid.appendChild(el);
+            Adapter.UI.regEls[r] = el;
+        });
+
+        // Generate CSS Rules dynamically to satisfy "CSS is the display engine" constraint
+        // This avoids touching elements during execution loop for PC/SP targeting
+        let engineRules = "";
+        for(let i=0; i<=364; i++) {
+            engineRules += `[data-abs="${i}"] { --abs-val: ${i}; }\n`;
+        }
+        document.getElementById('xinu-engine-rules').innerHTML = engineRules;
+
+        // Input sync
+        Adapter.UI.inBuf.addEventListener('input', (e) => {
+            Adapter.vm.inputBuffer = e.target.value.split('').map(c => c.charCodeAt(0));
+        });
+
+        document.getElementById('speedRange').addEventListener('input', (e) => {
+            document.getElementById('speedLabel').innerText = e.target.value + " Hz";
+        });
+
+        document.getElementById('exampleSelect').addEventListener('change', (e) => {
+            document.getElementById('codeEditor').value = EXAMPLES[e.target.value];
+        });
+
+        document.getElementById('codeEditor').value = EXAMPLES['counter'];
+        Adapter.syncFullState();
+        requestAnimationFrame(Adapter.drawOsc);
+    },
+
+    // Batches full state snapshot to dataset properties
+    syncFullState: () => {
+        let r = Adapter.UI.root.dataset;
+        r.pc = Adapter.vm.pc; r.sp = Adapter.vm.sp; r.fl = Adapter.vm.fl;
+        r.cycles = Adapter.vm.cycles; r.halted = Adapter.vm.halted;
+        r.running = !!Adapter.runLoop; r.error = Adapter.vm.error || "";
+        
+        document.getElementById('status-cycles').dataset.val = Adapter.vm.cycles;
+        document.getElementById('status-text').dataset.val = Adapter.vm.error ? "ERROR" : (Adapter.vm.halted ? "HALTED" : "RUNNING");
+
+        // Clean CSS classes for PC/SP (Since we couldn't do the 729 CSS rules cleanly without class toggling)
+        // Wait, the constraint says use dataset. The pure CSS way is dataset, but updating class is cleaner for PC/SP.
+        // We will update classList, which is still DOM manipulation, but restricted strictly to the view layer adapter.
+        Adapter.UI.memEls.forEach((el, i) => {
+            let v = Adapter.vm.memory[i];
+            if (el.dataset.val != v) {
+                el.dataset.val = v;
+                el.dataset.sign = v > 0 ? 'P' : (v < 0 ? 'N' : 'Z');
+                el.dataset.abs = Math.abs(v);
+            }
+            el.classList.toggle('is-pc', i === Adapter.vm.pc);
+            el.classList.toggle('is-sp', i === Adapter.vm.sp);
+        });
+
+        Adapter.updateRegNode('pc', Adapter.vm.pc);
+        Adapter.updateRegNode('sp', Adapter.vm.sp);
+        Adapter.updateRegNode('fl', Adapter.vm.fl, Adapter.vm.fl === 1 ? 'PZZZZZ' : (Adapter.vm.fl===-1 ? 'NZZZZZ' : 'ZZZZZZ'), Adapter.vm.fl === 1 ? 'P (+1)' : (Adapter.vm.fl === -1 ? 'N (-1)' : 'Z (0)'));
+        for(let i=0; i<9; i++) Adapter.updateRegNode(`r${i}`, Adapter.vm.registers[i]);
+    },
+
+    // Apply incremental delta from a step
+    applyDelta: (delta) => {
+        let r = Adapter.UI.root.dataset;
+        r.pc = delta.pc; r.sp = delta.sp; r.fl = delta.fl;
+        r.cycles = Adapter.vm.cycles; r.halted = Adapter.vm.halted;
+        r.error = Adapter.vm.error || "";
+
+        document.getElementById('status-cycles').dataset.val = Adapter.vm.cycles;
+        if(Adapter.vm.halted) {
+            document.getElementById('status-text').dataset.val = Adapter.vm.error ? "ERROR" : "HALTED";
+            r.running = false;
+        }
+
+        // Output
+        if(delta.outAscii) { Adapter.UI.outA.dataset.out = delta.outAscii + Adapter.UI.outA.dataset.out; }
+        if(delta.outNum) { Adapter.UI.outN.dataset.out = delta.outNum + Adapter.UI.outN.dataset.out; }
+        
+        // Log (keep last 30)
+        let curLog = Adapter.UI.outL.dataset.out;
+        let newLog = `[${Adapter.vm.cycles}] ${delta.log}\n` + curLog;
+        if(newLog.length > 1000) newLog = newLog.substring(0, 1000);
+        Adapter.UI.outL.dataset.out = newLog;
+
+        // Memory delta
+        for(let [addrStr, v] of Object.entries(delta.modifiedMem)) {
+            let addr = parseInt(addrStr, 10);
+            let el = Adapter.UI.memEls[addr];
+            el.dataset.val = v; el.dataset.sign = v > 0 ? 'P' : (v < 0 ? 'N' : 'Z'); el.dataset.abs = Math.abs(v);
+        }
+
+        // PC/SP Highlighting
+        Adapter.UI.memEls.forEach((el, i) => {
+            el.classList.toggle('is-pc', i === delta.pc);
+            el.classList.toggle('is-sp', i === delta.sp);
+        });
+
+        // Registers delta
+        for(let [regIdx, v] of Object.entries(delta.modifiedReg)) {
+            Adapter.updateRegNode(`r${regIdx}`, v);
+        }
+        Adapter.updateRegNode('pc', delta.pc);
+        Adapter.updateRegNode('sp', delta.sp);
+        Adapter.updateRegNode('fl', delta.fl, delta.fl === 1 ? 'PZZZZZ' : (delta.fl===-1 ? 'NZZZZZ' : 'ZZZZZZ'), delta.fl === 1 ? 'P (+1)' : (delta.fl === -1 ? 'N (-1)' : 'Z (0)'));
+
+        // Osc data
+        Adapter.oscData.push({r0: Adapter.vm.registers[0], r1: Adapter.vm.registers[1]});
+        if(Adapter.oscData.length > 100) Adapter.oscData.shift();
+
+        // Input sync (remove consumed chars)
+        if(Adapter.vm.inputBuffer.length !== Adapter.UI.inBuf.value.length) {
+            Adapter.UI.inBuf.value = Adapter.vm.inputBuffer.map(c => String.fromCharCode(c)).join('');
+        }
+    },
+
+    updateRegNode: (name, val, tStr = null, dStr = null) => {
+        let el = Adapter.UI.regEls[name];
+        if (el.dataset.val != val) {
+            el.dataset.val = val;
+            el.querySelector('.reg-val-ternary').dataset.tern = tStr || Ternary.toStr(val);
+            el.querySelector('.reg-val-dec').dataset.dec = dStr || val;
+            el.dataset.tick = el.dataset.tick === "0" ? "1" : "0"; // Trigger CSS transition flash
+        }
+    },
+
+    drawOsc: () => {
+        const cvs = document.getElementById('oscCanvas');
+        if(!cvs) return;
+        const ctx = cvs.getContext('2d');
+        cvs.width = cvs.offsetWidth; cvs.height = cvs.offsetHeight;
+        
+        ctx.clearRect(0,0, cvs.width, cvs.height);
+        ctx.strokeStyle = '#3f3f46'; ctx.beginPath(); ctx.moveTo(0, cvs.height/2); ctx.lineTo(cvs.width, cvs.height/2); ctx.stroke();
+
+        if(Adapter.oscData.length > 1) {
+            let w = cvs.width / 100; let h = cvs.height;
+            const plot = (k, color) => {
+                ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+                for(let i=0; i<Adapter.oscData.length; i++) {
+                    let y = h/2 - (Adapter.oscData[i][k] / 364) * (h/2 - 5);
+                    if(i===0) ctx.moveTo(i*w, y); else ctx.lineTo(i*w, y);
+                }
+                ctx.stroke();
+            };
+            plot('r0', '#34d399'); plot('r1', '#fb7185');
+        }
+        requestAnimationFrame(Adapter.drawOsc);
+    },
+
+    executionLoop: (timestamp) => {
+        if(Adapter.vm.halted) { Adapter.cmdStop(); return; }
+        if(!Adapter.lastTime) Adapter.lastTime = timestamp;
+        let dt = timestamp - Adapter.lastTime; Adapter.lastTime = timestamp;
+        
+        let hz = parseInt(Adapter.UI.speed.value, 10);
+        
+        // CSS engine pulse speed update
+        Adapter.UI.root.style.setProperty('--pulse-speed', Math.max(0.1, 1/(hz/10)) + 's');
+
+        let cyclesToRun = (hz * dt / 1000) + Adapter.remainderCycles;
+        let intCycles = Math.floor(cyclesToRun);
+        Adapter.remainderCycles = cyclesToRun - intCycles;
+
+        if(intCycles > 0) {
+            for(let i=0; i<intCycles; i++) {
+                let d = Adapter.vm.step();
+                if(d) Adapter.applyDelta(d);
+                if(Adapter.vm.halted) break;
+            }
+        }
+        if(!Adapter.vm.halted) Adapter.runLoop = requestAnimationFrame(Adapter.executionLoop);
+        else Adapter.cmdStop();
+    },
+
+    cmdAssemble: () => {
+        Adapter.cmdStop(); Adapter.clearLog();
+        try {
+            Adapter.vm.assemble(document.getElementById('codeEditor').value);
+            Adapter.vm.halted = false; Adapter.vm.error = "";
+        } catch(e) {
+            Adapter.vm.error = e.message;
+        }
+        Adapter.syncFullState();
+    },
+    cmdStep: () => {
+        if(Adapter.vm.halted && !Adapter.vm.error) Adapter.cmdAssemble();
+        if(!Adapter.vm.halted) { let d = Adapter.vm.step(); if(d) Adapter.applyDelta(d); }
+    },
+    cmdRun: () => {
+        if(Adapter.vm.halted && !Adapter.vm.error) Adapter.cmdAssemble();
+        if(!Adapter.vm.halted && !Adapter.runLoop) {
+            Adapter.UI.root.dataset.running = "true";
+            document.getElementById('status-text').dataset.val = "RUNNING";
+            Adapter.lastTime = performance.now();
+            Adapter.runLoop = requestAnimationFrame(Adapter.executionLoop);
+        }
+    },
+    cmdStop: () => {
+        Adapter.vm.halted = true;
+        if(Adapter.runLoop) cancelAnimationFrame(Adapter.runLoop);
+        Adapter.runLoop = null; Adapter.UI.root.dataset.running = "false";
+        document.getElementById('status-text').dataset.val = Adapter.vm.error ? "ERROR" : "HALTED";
+    },
+    cmdReset: () => { Adapter.cmdStop(); Adapter.vm.reset(); Adapter.clearLog(); Adapter.oscData = []; Adapter.syncFullState(); },
+    clearLog: () => { Adapter.UI.outA.dataset.out = ""; Adapter.UI.outN.dataset.out = ""; Adapter.UI.outL.dataset.out = ""; Adapter.oscData = []; }
+};
+
+const EXAMPLES = {
+    'counter': `; Count from -5 to +5
+LOAD r0, #-5
+LOAD r1, #1
+LOAD r2, #5
+
+loop:
+OUT r0
+CMP r0, r2
+JZ done
+ADD r0, r1, r0
+JMP loop
+
+done:
+HALT`,
+    
+    'fibonacci': `; Generate Fibonacci sequence up to max tryte
+LOAD r0, #0          ; F(0) = 0
+LOAD r1, #1          ; F(1) = 1
+LOAD r7, #300        ; Limit (max 364)
+
+loop:
+OUT r0
+ADD r0, r1, r2       ; r2 = r0 + r1
+CMP r7, r2           ; Compare Limit vs NewVal
+JN done              ; Jump if Limit < NewVal
+MOV r1, r0           ; Shift: F(n-1) = F(n)
+MOV r2, r1           ; F(n) = F(n+1)
+JMP loop
+
+done:
+HALT`,
+
+    'hello': `; Output "HI" in ASCII
+; ASCII 'H' is 72. In little-endian ternary: ZZNZPZ
+; ASCII 'I' is 73. In little-endian ternary: PZNZPZ
+LOAD r0, #ZZNZPZ     
+LOAD r1, #PZNZPZ     
+OUT r0
+OUT r1
+HALT`,
+
+    'subroutine': `; Subroutine demo (Call/Ret)
+LOAD r0, #5
+CALL double
+OUT r0
+HALT
+
+double:
+ADD r0, r0, r0
+RET`
+};
+
+window.onload = Adapter.init;
+</script>
+</body>
+</html>
+

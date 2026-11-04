@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XINU-8 Virtual Computer (Enhanced)</title>
+<style>
+    :root {
+        --bg-color: #0d0d0d;
+        --panel-bg: #1a1a1a;
+        --border-color: #333;
+        --text-color: #aaa;
+        --accent-color: #0f0;
+        --error-color: #f55;
+        --font-mono: 'Courier New', Courier, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: var(--font-mono);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* HEADER */
+    header {
+        background: #000;
+        padding: 10px 20px;
+        border-bottom: 2px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    header h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: var(--accent-color);
+        text-shadow: 0 0 5px rgba(0,255,0,0.5);
+    }
+    .controls { display: flex; align-items: center; }
+    .controls select, .controls button, .controls input[type="range"] {
+        background: var(--panel-bg);
+        color: var(--accent-color);
+        border: 1px solid var(--border-color);
+        padding: 5px 10px;
+        font-family: var(--font-mono);
+        cursor: pointer;
+        margin-left: 10px;
+    }
+    .controls button:hover { background: #333; }
+    .controls button:active { background: var(--accent-color); color: #000; }
+    
+    .toggle-lbl {
+        color: #fff; margin-left: 15px; font-size: 13px; display: flex; align-items: center; cursor: pointer;
+    }
+    .toggle-lbl input { margin-right: 5px; }
+
+    /* MAIN LAYOUT */
+    #workspace {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .panel {
+        border-right: 2px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        background: var(--panel-bg);
+    }
+    .panel:last-child { border-right: none; }
+    .panel-header {
+        background: #222;
+        padding: 5px 10px;
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--border-color);
+        font-weight: bold;
+        color: #fff;
+        display: flex; justify-content: space-between;
+    }
+
+    /* LEFT: Editor (40%) */
+    #editor-panel { width: 40%; }
+    #code-editor {
+        flex: 1;
+        background: transparent;
+        color: #ddd;
+        border: none;
+        padding: 10px;
+        font-family: var(--font-mono);
+        font-size: 14px;
+        resize: none;
+        outline: none;
+        white-space: pre;
+    }
+    #assembler-bar {
+        padding: 10px;
+        background: #111;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* CENTER: Display (30%) */
+    #display-panel {
+        width: 30%;
+        background: #000;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    #screen-container {
+        position: relative;
+        background: #000;
+        border: 10px solid #222;
+        border-radius: 10px;
+        box-shadow: 0 0 20px #000 inset, 0 0 10px rgba(0,0,0,0.5);
+        padding: 5px;
+    }
+    #screen {
+        display: grid;
+        grid-template-columns: repeat(40, 1fr);
+        grid-template-rows: repeat(30, 1fr);
+        width: 400px;
+        height: 480px;
+        background: #000;
+        position: relative;
+        z-index: 1;
+    }
+    .cell {
+        width: 10px;
+        height: 16px;
+        line-height: 16px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: bold;
+        user-select: none;
+    }
+    /* CRT Scanline Effect */
+    #screen-container::after {
+        content: " ";
+        display: block;
+        position: absolute;
+        top: 0; left: 0; bottom: 0; right: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        z-index: 2;
+        background-size: 100% 4px, 6px 100%;
+        pointer-events: none;
+    }
+
+    /* RIGHT: Monitor (30%) */
+    #monitor-panel { width: 30%; overflow-y: auto; }
+    .monitor-section {
+        padding: 10px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .monitor-section h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: #fff; }
+    
+    .register-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+        font-size: 14px;
+    }
+    .reg { display: flex; justify-content: space-between; background: #111; padding: 3px 6px; }
+    .reg-name { color: #888; }
+    .reg-val { color: var(--accent-color); }
+    .flags { grid-column: span 2; display: flex; justify-content: space-between; }
+    .flag { color: #555; }
+    .flag.on { color: var(--accent-color); font-weight: bold; }
+
+    #mem-header {
+        display: flex; justify-content: space-between; margin-bottom: 5px;
+    }
+    #mem-header input {
+        background: #111; color: var(--accent-color); border: 1px solid #333;
+        width: 60px; text-align: center; font-family: var(--font-mono);
+    }
+    #mem-dump {
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre;
+        color: #bbb;
+    }
+    .mem-addr { color: #666; }
+    .mem-val { cursor: pointer; padding: 0 2px; }
+    .mem-val:hover { background: #333; }
+    .mem-val.pc { background: var(--accent-color); color: #000; }
+    .mem-val.bp { background: var(--error-color); color: #fff; }
+    
+    .sys-stat { font-size: 11px; color: #888; margin-top: 5px; }
+
+    /* BOTTOM AREA: Log, FS & Serial */
+    #bottom-area {
+        display: flex;
+        height: 160px;
+        background: #0a0a0a;
+        border-top: 2px solid var(--border-color);
+    }
+    #log-panel {
+        width: 34%;
+        padding: 10px;
+        overflow-y: auto;
+        font-size: 13px;
+        border-right: 2px solid var(--border-color);
+    }
+    .log-msg { margin: 2px 0; }
+    .log-info { color: #88f; }
+    .log-error { color: var(--error-color); }
+    .log-success { color: var(--accent-color); }
+    
+    #fs-panel {
+        width: 33%;
+        display: flex;
+        flex-direction: column;
+        border-right: 2px solid var(--border-color);
+    }
+    #fs-list {
+        list-style: none;
+        padding: 10px;
+        margin: 0;
+        font-size: 12px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .fs-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        border-bottom: 1px solid #333;
+        color: #ccc;
+    }
+    
+    #serial-panel {
+        width: 33%;
+        display: flex;
+        flex-direction: column;
+    }
+    #serial-out {
+        flex: 1;
+        padding: 10px;
+        overflow-y: auto;
+        font-size: 12px;
+        color: #ddd;
+        white-space: pre-wrap;
+    }
+    #serial-in {
+        background: #111;
+        color: var(--accent-color);
+        border: none;
+        border-top: 1px solid #333;
+        padding: 8px 10px;
+        font-family: var(--font-mono);
+        outline: none;
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>XINU-8 VIRTUAL MACHINE</h1>
+    <div class="controls">
+        <label class="toggle-lbl" title="Enable MUL/DIV, [XY+imm], INTs, Serial, MPU">
+            <input type="checkbox" id="chk-enhanced"> Enhanced Mode
+        </label>
+        <select id="example-select">
+            <option value="hello">Hello World</option>
+            <option value="echo">Keyboard Echo</option>
+            <option value="sprite">Moving Sprite</option>
+            <option value="serial">Serial Comm (Enhanced)</option>
+            <option value="blank">Blank Program</option>
+        </select>
+        <button id="btn-load">Load Example</button>
+        <span style="margin-left:20px; color:#666;">Speed:</span>
+        <input type="range" id="speed-slider" min="0" max="4" step="1" value="2">
+        <span id="speed-label" style="display:inline-block; width:100px;">1 KHz</span>
+        <button id="btn-run" style="background:#050; color:#0f0;">RUN</button>
+        <button id="btn-stop">STOP</button>
+        <button id="btn-step">STEP</button>
+        <button id="btn-reset">RESET</button>
+    </div>
+</header>
+
+<div id="workspace">
+    <div class="panel" id="editor-panel">
+        <div class="panel-header">Assembly Editor (Origin: 0x0200)</div>
+        <textarea id="code-editor" spellcheck="false"></textarea>
+        <div id="assembler-bar">
+            <button id="btn-assemble" style="font-weight:bold;">Assemble to RAM</button>
+            <span id="assemble-status"></span>
+        </div>
+    </div>
+
+    <div class="panel" id="display-panel">
+        <div id="screen-container">
+            <div id="screen"></div>
+        </div>
+        <div style="margin-top: 20px; color: #555; font-size: 12px; text-align: center;">
+            Display mapped at 0x8000 (Chars) & 0x9000 (Colors)<br>
+            Click screen to focus for keyboard input (Port 0xA000)
+        </div>
+    </div>
+
+    <div class="panel" id="monitor-panel">
+        <div class="panel-header">System Monitor</div>
+        <div class="monitor-section">
+            <h3>Registers</h3>
+            <div class="register-grid">
+                <div class="reg"><span class="reg-name">A</span><span class="reg-val" id="reg-a">00</span></div>
+                <div class="reg"><span class="reg-name">B</span><span class="reg-val" id="reg-b">00</span></div>
+                <div class="reg"><span class="reg-name">C</span><span class="reg-val" id="reg-c">00</span></div>
+                <div class="reg"><span class="reg-name">D (Mul/Div)</span><span class="reg-val" id="reg-d">00</span></div>
+                <div class="reg"><span class="reg-name">X (XY Lo)</span><span class="reg-val" id="reg-x">00</span></div>
+                <div class="reg"><span class="reg-name">Y (XY Hi)</span><span class="reg-val" id="reg-y">00</span></div>
+                <div class="reg"><span class="reg-name">SP</span><span class="reg-val" id="reg-sp">7FFF</span></div>
+                <div class="reg"><span class="reg-name">PC</span><span class="reg-val" id="reg-pc">B000</span></div>
+                <div class="flags">
+                    <span class="reg-name">FLAGS</span>
+                    <div>
+                        <span class="flag" id="flag-z">Z</span>
+                        <span class="flag" id="flag-c">C</span>
+                        <span class="flag" id="flag-n">N</span>
+                    </div>
+                </div>
+            </div>
+            <div class="sys-stat">
+                Cycles: <span id="cycle-count">0</span> | 
+                <span id="cpu-status">STOPPED</span><br>
+                INT: <span id="stat-ie">0</span> | MPU: <span id="stat-mpu">01</span>
+            </div>
+        </div>
+        <div class="monitor-section" style="flex:1; display:flex; flex-direction:column;">
+            <div id="mem-header">
+                <h3>Memory (Hex)</h3>
+                <div>
+                    Page: 0x<input type="text" id="mem-page" value="0200" maxlength="4">
+                </div>
+            </div>
+            <div id="mem-dump"></div>
+        </div>
+    </div>
+</div>
+
+<div id="bottom-area">
+    <div id="log-panel"></div>
+    <div id="fs-panel">
+        <div class="panel-header">Filesystem (0xC000)</div>
+        <ul id="fs-list"></ul>
+    </div>
+    <div id="serial-panel">
+        <div class="panel-header">Serial Console (Host ↔ VM)</div>
+        <div id="serial-out"></div>
+        <input type="text" id="serial-in" placeholder="Press Enter to send to VM Port 0xA009..." autocomplete="off">
+    </div>
+</div>
+
+<script>
+/**
+ * XINU-8 ARCHITECTURE IMPLEMENTATION (ENHANCED)
+ */
+
+let ENHANCED_MODE = false;
+
+document.getElementById('chk-enhanced').addEventListener('change', (e) => {
+    ENHANCED_MODE = e.target.checked;
+    logMsg(`Enhanced Mode ${ENHANCED_MODE ? 'ENABLED' : 'DISABLED'}`, 'info');
+});
+
+const PALETTE = [
+    '#000000', '#AA0000', '#00AA00', '#AA5500', '#0000AA', '#AA00AA', '#00AAAA', '#AAAAAA',
+    '#555555', '#FF5555', '#55FF55', '#FFFF55', '#5555FF', '#FF55FF', '#55FFFF', '#FFFFFF'
+];
+
+const GRAPHICS_CHARS = [
+    ' ', '▀', '▄', '█', '▌', '▐', '░', '▒', '▓', '■', '□', '▪', '▫', '▬', '▲', '►',
+    '▼', '◄', '○', '●', '◘', '◙', '☺', '☻', '☼', '♀', '♂', '♠', '♣', '♥', '♦', '♪'
+];
+
+// --- CPU CONSTANTS ---
+const OP = {
+    NOP: 0x00,
+    LDA_IMM: 0x10, LDB_IMM: 0x20,
+    MOV_AB: 0x3A, MOV_XA: 0x3B, MOV_YA: 0x3C, MOV_AX: 0x3D, MOV_AY: 0x3E,
+    ADD_AB: 0x4A, MUL_AB: 0x4B, INC_XY: 0x4C,
+    SUB_AB: 0x5A, DIV_AB: 0x5B,
+    AND_AB: 0x6A, OR_AB: 0x7A, XOR_AB: 0x8A, NOT_A: 0x9A,
+    JMP_ABS: 0xA0, JZ_ABS: 0xA1, JC_ABS: 0xA2, JNZ_ABS: 0xA3,
+    PUSH_A: 0xB0, POP_A: 0xB1,
+    CALL_ABS: 0xC0, RET: 0xD0,
+    LD_A_XY: 0xE0, ST_XY_A: 0xE1, LD_A_XY_OFF: 0xE2, ST_XY_A_OFF: 0xE3,
+    IN_PORT: 0xF0, OUT_PORT: 0xF1, EI: 0xF2, DI: 0xF3, RETI: 0xF4,
+    HLT: 0xFF
+};
+
+// --- SYSTEM HARDWARE ---
+
+class Memory {
+    constructor() {
+        this.ram = new Uint8Array(0x8000);   // 0x0000 - 0x7FFF
+        this.vram = new Uint8Array(0x1000);  // 0x8000 - 0x8FFF
+        this.cram = new Uint8Array(0x1000);  // 0x9000 - 0x9FFF
+        this.io = new Uint8Array(0x0010);    // 0xA000 - 0xA00F
+        this.rom = new Uint8Array(0x1000);   // 0xB000 - 0xBFFF
+        this.fs = new Uint8Array(0x4000);    // 0xC000 - 0xFFFF
+        
+        this.serialRX = [];
+        this.serialTX = [];
+        this.vramDirty = true;
+        this.timerLow = 0;
+        this.timerHigh = 0;
+        
+        this.io[0x07] = 0x01; // MPU default: ROM WP=1
+        
+        for(let i=0; i<1200; i++) this.cram[i] = 0x0F;
+        this.loadFS();
+    }
+
+    read(addr) {
+        if (addr < 0x8000) return this.ram[addr];
+        if (addr < 0x9000) return this.vram[addr & 0x0FFF];
+        if (addr < 0xA000) return this.cram[addr & 0x0FFF];
+        if (addr < 0xA010) {
+            let port = addr & 0x000F;
+            if (port === 0x0) { let k = this.io[0]; this.io[0] = 0; return k; }
+            if (port === 0x1) return Math.floor(Math.random() * 256);
+            if (port === 0x2) return this.timerLow;
+            if (port === 0x3) return this.timerHigh;
+            if (port === 0x8) return (this.serialRX.length > 0 ? 1 : 0) | 2; // bit0=RX ready, bit1=TX empty
+            if (port === 0x9) return this.serialRX.shift() || 0;
+            return this.io[port];
+        }
+        if (addr < 0xB000) return 0;
+        if (addr < 0xC000) return this.rom[addr & 0x0FFF];
+        return this.fs[addr & 0x3FFF];
+    }
+
+    write(addr, val) {
+        if (addr < 0x8000) this.ram[addr] = val;
+        else if (addr < 0x9000) { 
+            let offset = addr & 0x0FFF;
+            if(offset < 1200 && this.vram[offset] !== val) {
+                this.vram[offset] = val; this.vramDirty = true; 
+            }
+        }
+        else if (addr < 0xA000) { 
+            let offset = addr & 0x0FFF;
+            if(offset < 1200 && this.cram[offset] !== val) {
+                this.cram[offset] = val; this.vramDirty = true; 
+            }
+        }
+        else if (addr < 0xA010) {
+            let port = addr & 0x000F;
+            this.io[port] = val;
+            if (port === 0x9) {
+                if (window.xinu8SerialHandler) window.xinu8SerialHandler(val);
+            }
+            if (port === 0xA && ENHANCED_MODE) { // Hardware Scroll
+                let lines = val;
+                let bytes = lines * 40;
+                if(bytes > 0 && bytes <= 1200) {
+                    for (let i = 0; i < 1200 - bytes; i++) {
+                        this.vram[i] = this.vram[i + bytes];
+                        this.cram[i] = this.cram[i + bytes];
+                    }
+                    for (let i = 1200 - bytes; i < 1200; i++) {
+                        this.vram[i] = 0x20; this.cram[i] = 0x0F;
+                    }
+                    this.vramDirty = true;
+                }
+            }
+        }
+        else if (addr < 0xC000) {
+            // Check MPU before ROM write
+            if (ENHANCED_MODE && (this.io[0x07] & 1)) {
+                // ROM is write protected, silently ignore but handled in CPU wrapper to set C flag
+            } else {
+                this.rom[addr & 0x0FFF] = val;
+            }
+        }
+        else {
+            this.fs[addr & 0x3FFF] = val;
+            this.scheduleFSSync();
+        }
+    }
+
+    /* FILESYSTEM API */
+    loadFS() {
+        try {
+            let data = localStorage.getItem('xinu8-fs');
+            if (data) {
+                let binary = atob(data);
+                for (let i = 0; i < binary.length && i < this.fs.length; i++) {
+                    this.fs[i] = binary.charCodeAt(i);
+                }
+            }
+        } catch(e) { console.error("FS Load error", e); }
+    }
+
+    scheduleFSSync() {
+        if (this.syncTimer) clearTimeout(this.syncTimer);
+        this.syncTimer = setTimeout(() => {
+            let str = "";
+            for (let i = 0; i < this.fs.length; i++) str += String.fromCharCode(this.fs[i]);
+            localStorage.setItem('xinu8-fs', btoa(str));
+            if(window.updateFSUI) window.updateFSUI();
+        }, 1000);
+    }
+
+    fsList() {
+        let files = [];
+        for (let i = 0; i < 16; i++) {
+            let base = i * 1024;
+            if (this.fs[base] === 0xFF) {
+                let name = '';
+                for (let j = 1; j <= 8; j++) {
+                    let c = this.fs[base + j];
+                    name += c === 0x20 ? '' : String.fromCharCode(c);
+                }
+                files.push({ slot: i, name: name.trim() });
+            }
+        }
+        return files;
+    }
+
+    fsFind(name) {
+        let padded = name.padEnd(8, ' ').substring(0, 8);
+        for(let i=0; i<16; i++) {
+            let base = i * 1024;
+            if(this.fs[base] === 0xFF) {
+                let match = true;
+                for(let j=0; j<8; j++) if(this.fs[base+1+j] !== padded.charCodeAt(j)) match = false;
+                if(match) return i;
+            }
+        }
+        return -1;
+    }
+
+    fsRead(slotOrName) {
+        let slot = typeof slotOrName === 'number' ? slotOrName : this.fsFind(slotOrName);
+        if (slot < 0 || slot > 15) return null;
+        let base = slot * 1024;
+        if (this.fs[base] !== 0xFF) return null;
+        return this.fs.slice(base + 16, base + 1024);
+    }
+
+    fsWrite(slot, name, data) {
+        let base = slot * 1024;
+        this.fs[base] = 0xFF;
+        let padded = name.padEnd(8, ' ').substring(0, 8);
+        for (let i = 0; i < 8; i++) this.fs[base + 1 + i] = padded.charCodeAt(i);
+        for (let i = 0; i < Math.min(data.length, 1008); i++) this.fs[base + 16 + i] = data[i];
+        this.scheduleFSSync();
+    }
+
+    fsDelete(slotOrName) {
+        let slot = typeof slotOrName === 'number' ? slotOrName : this.fsFind(slotOrName);
+        if (slot >= 0 && slot <= 15) {
+            this.fs[slot * 1024] = 0x00;
+            this.scheduleFSSync();
+        }
+    }
+}
+
+class CPU {
+    constructor(memory) {
+        this.mem = memory;
+        this.reset();
+        this.breakpoints = new Set();
+    }
+
+    reset() {
+        this.reg = { A: 0, B: 0, C: 0, D: 0 };
+        this.xy = 0;
+        this.sp = 0x7FFF;
+        this.pc = 0xB000; 
+        this.flags = { Z: 0, C: 0, N: 0 };
+        this.cycles = 0;
+        this.halted = false;
+        this.ie = 0;
+        this.interruptPending = false;
+    }
+
+    get X() { return this.xy & 0xFF; }
+    get Y() { return (this.xy >> 8) & 0xFF; }
+    setX(val) { this.xy = (this.xy & 0xFF00) | (val & 0xFF); }
+    setY(val) { this.xy = (this.xy & 0x00FF) | ((val & 0xFF) << 8); }
+
+    setFlags(val) {
+        this.flags.Z = (val === 0) ? 1 : 0;
+        this.flags.N = (val & 0x80) ? 1 : 0;
+    }
+    
+    writeMemSafe(addr, val) {
+        if (ENHANCED_MODE && addr >= 0xB000 && addr < 0xC000 && (this.mem.io[0x07] & 1)) {
+            this.flags.C = 1; // MPU ROM write protect
+        } else {
+            this.mem.write(addr, val);
+        }
+    }
+
+    checkInterrupt() {
+        if (!ENHANCED_MODE || !this.ie || this.interruptPending) return;
+        let compare = this.mem.io[0x06];
+        if (compare !== 0 && this.mem.timerLow === compare) {
+            this.interruptPending = true;
+            this.ie = 0; // Auto-disable
+            this.mem.write(this.sp--, (this.pc >> 8) & 0xFF);
+            this.mem.write(this.sp--, this.pc & 0xFF);
+            this.mem.write(this.sp--, (this.flags.Z << 2) | (this.flags.C << 1) | this.flags.N);
+            this.pc = 0xBFF0; // Vector
+        }
+    }
+    
+    checkExecutionMPU() {
+        if (!ENHANCED_MODE) return false;
+        let mpu = this.mem.io[0x07];
+        if (this.pc < 0x8000 && (mpu & 2)) return true; // RAM execute protect
+        if (this.pc >= 0xC000 && !(mpu & 4)) return true; // FS execute allow (must be 1)
+        return false;
+    }
+
+    step() {
+        if (this.halted) return 0;
+        
+        this.checkInterrupt();
+        
+        if (this.checkExecutionMPU()) {
+            // Trap
+            this.mem.write(this.sp--, (this.pc >> 8) & 0xFF);
+            this.mem.write(this.sp--, this.pc & 0xFF);
+            this.mem.write(this.sp--, (this.flags.Z << 2) | (this.flags.C << 1) | this.flags.N);
+            this.pc = 0xBFF4;
+            return 4;
+        }
+        
+        let op = this.mem.read(this.pc++);
+        let cycles = 1;
+        
+        // Strict Mode Guard
+        if (!ENHANCED_MODE && [OP.MUL_AB, OP.DIV_AB, OP.LD_A_XY_OFF, OP.ST_XY_A_OFF, OP.EI, OP.DI, OP.RETI].includes(op)) {
+            this.halted = true;
+            logMsg(`Illegal opcode (Enhanced Mode disabled): 0x${op.toString(16).padStart(2,'0')} at 0x${(this.pc-1).toString(16).padStart(4,'0')}`, 'error');
+            return 1;
+        }
+
+        switch(op) {
+            case OP.NOP: break;
+            case OP.LDA_IMM: this.reg.A = this.mem.read(this.pc++); cycles = 2; break;
+            case OP.LDB_IMM: this.reg.B = this.mem.read(this.pc++); cycles = 2; break;
+            
+            case OP.MOV_AB: this.reg.A = this.reg.B; break;
+            case OP.MOV_XA: this.setX(this.reg.A); break;
+            case OP.MOV_YA: this.setY(this.reg.A); break;
+            case OP.MOV_AX: this.reg.A = this.X; break;
+            case OP.MOV_AY: this.reg.A = this.Y; break;
+            
+            case OP.ADD_AB: {
+                let res = this.reg.A + this.reg.B;
+                this.flags.C = (res > 255) ? 1 : 0;
+                this.reg.A = res & 0xFF;
+                this.setFlags(this.reg.A);
+                break;
+            }
+            case OP.SUB_AB: {
+                let res = this.reg.A - this.reg.B;
+                this.flags.C = (res < 0) ? 1 : 0;
+                this.reg.A = res & 0xFF;
+                this.setFlags(this.reg.A);
+                break;
+            }
+            case OP.MUL_AB: {
+                let res = this.reg.A * this.reg.B;
+                this.reg.A = res & 0xFF;
+                this.reg.D = (res >> 8) & 0xFF;
+                this.flags.C = (this.reg.D !== 0) ? 1 : 0;
+                this.setFlags(this.reg.A);
+                cycles = 8;
+                break;
+            }
+            case OP.DIV_AB: {
+                if (this.reg.B === 0) {
+                    this.flags.C = 1; this.reg.A = 0xFF; this.reg.D = 0xFF;
+                } else {
+                    this.reg.D = this.reg.A % this.reg.B;
+                    this.reg.A = Math.floor(this.reg.A / this.reg.B);
+                    this.flags.C = 0;
+                    this.setFlags(this.reg.A);
+                }
+                cycles = 8;
+                break;
+            }
+            case OP.INC_XY: {
+                this.xy = (this.xy + 1) & 0xFFFF;
+                cycles = 2;
+                break;
+            }
+            
+            case OP.AND_AB:
+                this.reg.A = (this.reg.A & this.reg.B) & 0xFF;
+                this.setFlags(this.reg.A); break;
+            case OP.OR_AB:
+                this.reg.A = (this.reg.A | this.reg.B) & 0xFF;
+                this.setFlags(this.reg.A); break;
+            case OP.XOR_AB:
+                this.reg.A = (this.reg.A ^ this.reg.B) & 0xFF;
+                this.setFlags(this.reg.A); break;
+            case OP.NOT_A:
+                this.reg.A = (~this.reg.A) & 0xFF;
+                this.setFlags(this.reg.A); break;
+                
+            case OP.JMP_ABS: {
+                let low = this.mem.read(this.pc++); let high = this.mem.read(this.pc++);
+                this.pc = (high << 8) | low; cycles = 3; break;
+            }
+            case OP.JZ_ABS: {
+                let low = this.mem.read(this.pc++); let high = this.mem.read(this.pc++);
+                if (this.flags.Z) this.pc = (high << 8) | low;
+                cycles = 3; break;
+            }
+            case OP.JC_ABS: {
+                let low = this.mem.read(this.pc++); let high = this.mem.read(this.pc++);
+                if (this.flags.C) this.pc = (high << 8) | low;
+                cycles = 3; break;
+            }
+            case OP.JNZ_ABS: {
+                let low = this.mem.read(this.pc++); let high = this.mem.read(this.pc++);
+                if (!this.flags.Z) this.pc = (high << 8) | low;
+                cycles = 3; break;
+            }
+            
+            case OP.PUSH_A:
+                this.mem.write(this.sp--, this.reg.A); cycles = 3; break;
+            case OP.POP_A:
+                this.reg.A = this.mem.read(++this.sp); cycles = 3; break;
+                
+            case OP.CALL_ABS: {
+                let low = this.mem.read(this.pc++); let high = this.mem.read(this.pc++);
+                this.mem.write(this.sp--, (this.pc >> 8) & 0xFF);
+                this.mem.write(this.sp--, this.pc & 0xFF);
+                this.pc = (high << 8) | low;
+                cycles = 4; break;
+            }
+            case OP.RET: {
+                let low = this.mem.read(++this.sp); let high = this.mem.read(++this.sp);
+                this.pc = (high << 8) | low;
+                cycles = 4; break;
+            }
+            
+            case OP.LD_A_XY: { this.reg.A = this.mem.read(this.xy); cycles = 3; break; }
+            case OP.ST_XY_A: { this.writeMemSafe(this.xy, this.reg.A); cycles = 3; break; }
+            
+            case OP.LD_A_XY_OFF: {
+                let off = this.mem.read(this.pc++);
+                if (off & 0x80) off -= 0x100;
+                this.reg.A = this.mem.read((this.xy + off) & 0xFFFF);
+                cycles = 4; break;
+            }
+            case OP.ST_XY_A_OFF: {
+                let off = this.mem.read(this.pc++);
+                if (off & 0x80) off -= 0x100;
+                this.writeMemSafe((this.xy + off) & 0xFFFF, this.reg.A);
+                cycles = 4; break;
+            }
+            
+            case OP.IN_PORT: {
+                let port = this.mem.read(this.pc++);
+                this.reg.A = this.mem.read(0xA000 | port);
+                cycles = 3; break;
+            }
+            case OP.OUT_PORT: {
+                let port = this.mem.read(this.pc++);
+                this.mem.write(0xA000 | port, this.reg.A);
+                cycles = 3; break;
+            }
+            
+            case OP.EI: { this.ie = 1; this.interruptPending = false; break; }
+            case OP.DI: { this.ie = 0; break; }
+            case OP.RETI: {
+                let f = this.mem.read(++this.sp);
+                this.flags.Z = (f >> 2) & 1; this.flags.C = (f >> 1) & 1; this.flags.N = f & 1;
+                let low = this.mem.read(++this.sp); let high = this.mem.read(++this.sp);
+                this.pc = (high << 8) | low;
+                this.ie = 1; // Re-enable
+                this.interruptPending = false;
+                cycles = 4; break;
+            }
+            
+            case OP.HLT:
+                this.halted = true; break;
+            default:
+                logMsg(`Illegal opcode 0x${op.toString(16).padStart(2,'0')} at 0x${(this.pc-1).toString(16).padStart(4,'0')}`, 'error');
+                this.halted = true; break;
+        }
+
+        this.cycles += cycles;
+        if (this.cycles % 16 < cycles) {
+            this.mem.timerLow = (this.mem.timerLow + 1) & 0xFF;
+            if (this.mem.timerLow === 0) this.mem.timerHigh = (this.mem.timerHigh + 1) & 0xFF;
+        }
+
+        return cycles;
+    }
+}
+
+// --- ASSEMBLER ---
+
+class Assembler {
+    constructor() {
+        this.labels = {};
+        this.equs = {};
+    }
+
+    parseImmediate(str) {
+        str = str.trim();
+        if (str.startsWith('#0x')) return parseInt(str.substring(3), 16);
+        if (str.startsWith('#')) return parseInt(str.substring(1), 10);
+        return null;
+    }
+
+    parseAddress(str) {
+        str = str.trim();
+        if (str.startsWith('0x')) return parseInt(str.substring(2), 16);
+        if (str.match(/^-?[0-9]+$/)) return parseInt(str, 10);
+        return null;
+    }
+
+    assemble(code, memArray) {
+        this.labels = {};
+        this.equs = {};
+        let lines = code.split('\n');
+        
+        // Pass 0: Extract EQUs
+        let filteredLines = [];
+        for (let line of lines) {
+            let pureLine = line.split(';')[0].trim();
+            if (!pureLine) continue;
+            let equMatch = pureLine.match(/^([A-Za-z0-9_]+):?\s+EQU\s+(.+)$/i);
+            if (equMatch) {
+                this.equs[equMatch[1].toUpperCase()] = this.parseAddress(equMatch[2]) || this.parseImmediate(equMatch[2]) || 0;
+            } else {
+                filteredLines.push(line);
+            }
+        }
+
+        let parsedLines = [];
+        let expandedCode = [];
+        
+        // Pass 1: Handle textual macros and EQUs substitution
+        for(let line of filteredLines) {
+            let pureLine = line.split(';')[0].trim();
+            if(!pureLine) { expandedCode.push(line); continue; }
+            
+            // Replace EQU references
+            for(let key in this.equs) {
+                let re = new RegExp(`\\b${key}\\b`, 'g');
+                pureLine = pureLine.replace(re, this.equs[key]);
+            }
+            
+            let isLabel = pureLine.includes(':') ? pureLine.split(':')[0] + ':' : '';
+            let cmd = pureLine.replace(isLabel, '').trim();
+            
+            let parts = cmd.split(/[\s,]+/);
+            let op = parts[0].toUpperCase();
+            
+            if (op === 'INC' && parts[1] === 'A') {
+                if(isLabel) expandedCode.push(isLabel);
+                expandedCode.push('LDB #1', 'ADD A,B'); 
+            } else if (op === 'DEC' && parts[1] === 'A') {
+                if(isLabel) expandedCode.push(isLabel);
+                expandedCode.push('LDB #1', 'SUB A,B'); 
+            } else if (op === 'CMP' && parts[1] === 'A') {
+                if(isLabel) expandedCode.push(isLabel);
+                expandedCode.push(`LDB ${parts[2]}`, 'SUB A,B'); 
+            } else if (op === 'CLR' && parts[1] === 'A') {
+                if(isLabel) expandedCode.push(isLabel);
+                expandedCode.push('XOR A,A');
+            } else {
+                expandedCode.push(isLabel ? isLabel + ' ' + cmd : cmd);
+            }
+        }
+
+        // Pass 2: Calculate addresses and labels
+        let pc = 0x0200; 
+        for (let i = 0; i < expandedCode.length; i++) {
+            let line = expandedCode[i].split(';')[0].trim();
+            
+            let labelMatch = line.match(/^([A-Za-z0-9_]+):/);
+            if (labelMatch) {
+                this.labels[labelMatch[1].toUpperCase()] = pc;
+                line = line.substring(labelMatch[0].length).trim();
+            }
+            if (!line) continue;
+
+            let tokens = line.split(/[\s,]+/);
+            let op = tokens[0].toUpperCase();
+
+            let bytes = 0;
+            if (op === 'ORG') {
+                pc = this.parseAddress(tokens[1]);
+                continue;
+            } else if (op === 'ALIGN') {
+                let align = this.parseAddress(tokens[1]) || 1;
+                while(pc % align !== 0) { pc++; bytes++; }
+            } else if (op === 'DB') {
+                let match = line.match(/DB\s+(.+)/i);
+                if(match) {
+                    let args = match[1].split(/(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+                    for(let a of args) {
+                        a = a.replace(/^,|,$/g, '').trim();
+                        if(a.startsWith('"') && a.endsWith('"')) {
+                            let s = a.substring(1, a.length-1);
+                            s = s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+                            bytes += s.length;
+                        }
+                        else bytes += 1;
+                    }
+                }
+            } else if (op === 'DW') bytes = 2 * (tokens.length - 1);
+            else if (op === 'DS') bytes = this.parseAddress(tokens[1]);
+            else {
+                if (['NOP','ADD','SUB','AND','OR','XOR','NOT','PUSH','POP','RET','HLT', 'EI', 'DI', 'RETI', 'MUL', 'DIV'].includes(op) && 
+                    !(op === 'ADD' && tokens[1] !== 'A') && !(op==='SUB' && tokens[1]!=='A')) {
+                    bytes = 1;
+                }
+                else if (op === 'MOV') bytes = 1;
+                else if (op === 'INC' && tokens[1] === 'XY') bytes = 1;
+                else if (['LDA', 'LDB', 'IN', 'OUT'].includes(op)) bytes = 2;
+                else if (['JMP', 'JZ', 'JC', 'JNZ', 'CALL'].includes(op)) bytes = 3;
+                else if (op === 'LD' && tokens[1] === 'A' && tokens[2].startsWith('[XY')) {
+                    bytes = (tokens[2] === '[XY]') ? 1 : 2;
+                }
+                else if (op === 'ST' && tokens[1].startsWith('[XY') && tokens[2] === 'A') {
+                    bytes = (tokens[1] === '[XY]') ? 1 : 2;
+                }
+                else bytes = 1; // Fallback
+            }
+            
+            parsedLines.push({ lineNum: i+1, op: op, tokens: tokens, pc: pc, text: line });
+            if (op !== 'ALIGN') pc += bytes;
+        }
+
+        // Pass 3: Generate code
+        let errors = [];
+        let outputBinary = [];
+
+        for (let p of parsedLines) {
+            let { op, tokens, pc, text } = p;
+            let writeByte = (b) => {
+                if (pc < 0x8000) memArray[pc] = b & 0xFF;
+                outputBinary.push(b & 0xFF);
+                pc++;
+            };
+            let writeWord = (w) => { writeByte(w & 0xFF); writeByte((w >> 8) & 0xFF); };
+            
+            let getLabelOrAddr = (str) => {
+                str = str.trim();
+                if (this.labels[str.toUpperCase()] !== undefined) return this.labels[str.toUpperCase()];
+                let val = this.parseAddress(str);
+                return val !== null ? val : 0;
+            };
+
+            try {
+                if (op === 'ORG' || op === 'DS') { } 
+                else if (op === 'ALIGN') {
+                    let align = this.parseAddress(tokens[1]) || 1;
+                    while(pc % align !== 0) writeByte(0);
+                } else if (op === 'DB') {
+                    let match = text.match(/DB\s+(.+)/i);
+                    let args = match[1].split(/(?=(?:[^"]*"[^"]*")*[^"]*$)/); 
+                    for(let a of args) {
+                        a = a.replace(/^,|,$/g, '').trim();
+                        if(!a) continue;
+                        if(a.startsWith('"') && a.endsWith('"')) {
+                            let s = a.substring(1, a.length-1);
+                            s = s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+                            for(let i=0; i<s.length; i++) writeByte(s.charCodeAt(i));
+                        } else {
+                            writeByte(this.parseImmediate('#'+a) || this.parseAddress(a) || getLabelOrAddr(a));
+                        }
+                    }
+                } else if (op === 'DW') {
+                    for(let i=1; i<tokens.length; i++) writeWord(getLabelOrAddr(tokens[i]));
+                }
+                
+                // Instructions
+                else if (op === 'NOP') writeByte(OP.NOP);
+                else if (op === 'HLT') writeByte(OP.HLT);
+                else if (op === 'RET') writeByte(OP.RET);
+                else if (op === 'EI') writeByte(OP.EI);
+                else if (op === 'DI') writeByte(OP.DI);
+                else if (op === 'RETI') writeByte(OP.RETI);
+                else if (op === 'LDA') { writeByte(OP.LDA_IMM); writeByte(this.parseImmediate(tokens[1]) || getLabelOrAddr(tokens[1])); }
+                else if (op === 'LDB') { writeByte(OP.LDB_IMM); writeByte(this.parseImmediate(tokens[1]) || getLabelOrAddr(tokens[1])); }
+                
+                else if (op === 'LD') {
+                    if (tokens[1] === 'A' && tokens[2] === '[XY]') writeByte(OP.LD_A_XY);
+                    else if (tokens[1] === 'A' && tokens[2].startsWith('[XY')) {
+                        writeByte(OP.LD_A_XY_OFF);
+                        let offStr = tokens[2].match(/\[XY([+-]\w+)\]/i);
+                        let off = offStr ? (this.parseAddress(offStr[1]) || 0) : 0;
+                        writeByte(off);
+                    }
+                    else errors.push(`Invalid LD syntax: ${text}`);
+                }
+                else if (op === 'ST') {
+                    if (tokens[1] === '[XY]' && tokens[2] === 'A') writeByte(OP.ST_XY_A);
+                    else if (tokens[1].startsWith('[XY') && tokens[2] === 'A') {
+                        writeByte(OP.ST_XY_A_OFF);
+                        let offStr = tokens[1].match(/\[XY([+-]\w+)\]/i);
+                        let off = offStr ? (this.parseAddress(offStr[1]) || 0) : 0;
+                        writeByte(off);
+                    }
+                    else errors.push(`Invalid ST syntax: ${text}`);
+                }
+                
+                else if (op === 'MOV') {
+                    if (tokens[1] === 'A' && tokens[2] === 'B') writeByte(OP.MOV_AB);
+                    else if (tokens[1] === 'X' && tokens[2] === 'A') writeByte(OP.MOV_XA);
+                    else if (tokens[1] === 'Y' && tokens[2] === 'A') writeByte(OP.MOV_YA);
+                    else if (tokens[1] === 'A' && tokens[2] === 'X') writeByte(OP.MOV_AX);
+                    else if (tokens[1] === 'A' && tokens[2] === 'Y') writeByte(OP.MOV_AY);
+                    else errors.push(`Invalid MOV syntax: ${text}`);
+                }
+                
+                else if (op === 'ADD') writeByte(OP.ADD_AB);
+                else if (op === 'SUB') writeByte(OP.SUB_AB);
+                else if (op === 'MUL') writeByte(OP.MUL_AB);
+                else if (op === 'DIV') writeByte(OP.DIV_AB);
+                else if (op === 'INC' && tokens[1] === 'XY') writeByte(OP.INC_XY);
+                else if (op === 'AND') writeByte(OP.AND_AB);
+                else if (op === 'OR') writeByte(OP.OR_AB);
+                else if (op === 'XOR') writeByte(OP.XOR_AB);
+                else if (op === 'NOT') writeByte(OP.NOT_A);
+                
+                else if (op === 'PUSH') { if (tokens[1] === 'A') writeByte(OP.PUSH_A); }
+                else if (op === 'POP') { if (tokens[1] === 'A') writeByte(OP.POP_A); }
+                
+                else if (op === 'JMP') { writeByte(OP.JMP_ABS); writeWord(getLabelOrAddr(tokens[1])); }
+                else if (op === 'JZ') { writeByte(OP.JZ_ABS); writeWord(getLabelOrAddr(tokens[1])); }
+                else if (op === 'JC') { writeByte(OP.JC_ABS); writeWord(getLabelOrAddr(tokens[1])); }
+                else if (op === 'JNZ') { writeByte(OP.JNZ_ABS); writeWord(getLabelOrAddr(tokens[1])); }
+                else if (op === 'CALL') { writeByte(OP.CALL_ABS); writeWord(getLabelOrAddr(tokens[1])); }
+                
+                else if (op === 'IN') { writeByte(OP.IN_PORT); writeByte(this.parseImmediate(tokens[1]) || this.parseAddress(tokens[1])); }
+                else if (op === 'OUT') { writeByte(OP.OUT_PORT); writeByte(this.parseImmediate(tokens[1]) || this.parseAddress(tokens[1])); }
+                else {
+                    errors.push(`Unknown instruction: ${op} at line ${p.lineNum}`);
+                }
+            } catch(e) {
+                errors.push(`Error parsing line ${p.lineNum}: ${text}`);
+            }
+        }
+
+        return { errors, outputBinary };
+    }
+}
+
+// --- ROM BOOTLOADER ---
+const BOOTLOADER_CODE = `
+        ORG 0xB000
+        LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A         ; XY = 0x8000 (VRAM)
+        
+CLEAR:  LDA #0x20       ; Space
+        ST [XY],A
+        INC XY
+        
+        MOV A,Y
+        LDB #0x84
+        SUB A,B
+        JNZ CLEAR
+CHECK_X:MOV A,X
+        LDB #0xB0
+        SUB A,B
+        JNZ CLEAR       
+        
+DONE:   LDA #0x0C       ; Cursor row visible
+        OUT 0x04        
+        
+        LDA #0x00
+        MOV X,A
+        LDA #0x02
+        MOV Y,A         ; XY = 0x0200
+        LD A,[XY]
+        LDB #0x00
+        SUB A,B
+        JZ NOPROG
+        JMP 0x0200      ; Jump to user RAM
+
+NOPROG: LDA #0x00       ; Print NO PROGRAM
+        MOV X,A
+        LDA #0x80
+        MOV Y,A
+        LDA #0x4E       ; 'N'
+        ST [XY],A
+        INC XY
+        LDA #0x4F       ; 'O'
+        ST [XY],A
+        HLT
+`;
+
+// --- UI AND INTEGRATION ---
+
+const mem = new Memory();
+const cpu = new CPU(mem);
+const asm = new Assembler();
+
+// Global API
+window.fsFormat = () => { mem.fs.fill(0); mem.scheduleFSSync(); logMsg("FS formatted.", "success"); };
+window.updateFSUI = () => {
+    let list = document.getElementById('fs-list');
+    list.innerHTML = '';
+    let files = mem.fsList();
+    if (files.length === 0) list.innerHTML = '<li style="color:#666;text-align:center;">No files</li>';
+    for (let f of files) {
+        let li = document.createElement('li');
+        li.className = 'fs-item';
+        li.innerHTML = `<span>${f.name}</span> <span style="color:#666;">Slot ${f.slot}</span>`;
+        list.appendChild(li);
+    }
+};
+
+window.xinu8SendToVM = (char) => mem.serialRX.push(char.charCodeAt(0));
+window.xinu8SerialHandler = (char) => {
+    let out = document.getElementById('serial-out');
+    out.textContent += String.fromCharCode(char);
+    out.scrollTop = out.scrollHeight;
+};
+
+document.getElementById('serial-in').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        let text = e.target.value + '\n';
+        for(let i=0; i<text.length; i++) window.xinu8SendToVM(text[i]);
+        e.target.value = '';
+    }
+});
+
+// DOM Elements
+const screenEl = document.getElementById('screen');
+const cells = [];
+const txtEditor = document.getElementById('code-editor');
+const logPanel = document.getElementById('log-panel');
+const memDump = document.getElementById('mem-dump');
+const memPageIn = document.getElementById('mem-page');
+
+for (let i = 0; i < 1200; i++) {
+    let span = document.createElement('span');
+    span.className = 'cell';
+    span.textContent = ' ';
+    screenEl.appendChild(span);
+    cells.push(span);
+}
+
+function logMsg(msg, type='info') {
+    let div = document.createElement('div');
+    div.className = `log-msg log-${type}`;
+    let time = new Date().toLocaleTimeString();
+    div.textContent = `[${time}] ${msg}`;
+    logPanel.appendChild(div);
+    logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+function updateMonitor() {
+    document.getElementById('reg-a').textContent = cpu.reg.A.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-b').textContent = cpu.reg.B.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-c').textContent = cpu.reg.C.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-d').textContent = cpu.reg.D.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-x').textContent = cpu.X.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-y').textContent = cpu.Y.toString(16).padStart(2,'0').toUpperCase();
+    document.getElementById('reg-sp').textContent = cpu.sp.toString(16).padStart(4,'0').toUpperCase();
+    document.getElementById('reg-pc').textContent = cpu.pc.toString(16).padStart(4,'0').toUpperCase();
+    
+    document.getElementById('flag-z').className = 'flag' + (cpu.flags.Z ? ' on' : '');
+    document.getElementById('flag-c').className = 'flag' + (cpu.flags.C ? ' on' : '');
+    document.getElementById('flag-n').className = 'flag' + (cpu.flags.N ? ' on' : '');
+    
+    document.getElementById('cycle-count').textContent = cpu.cycles;
+    document.getElementById('cpu-status').textContent = cpu.halted ? "HALTED" : "RUNNING";
+    document.getElementById('cpu-status').style.color = cpu.halted ? varColor('error-color') : varColor('accent-color');
+    
+    document.getElementById('stat-ie').textContent = cpu.ie;
+    document.getElementById('stat-mpu').textContent = mem.io[0x07].toString(16).padStart(2,'0').toUpperCase();
+    
+    let pageStr = memPageIn.value.padStart(4, '0');
+    let baseAddr = parseInt(pageStr, 16);
+    if (isNaN(baseAddr)) baseAddr = 0;
+    baseAddr &= 0xFF00;
+    
+    let dumpHTML = '';
+    for(let i=0; i<256; i+=16) {
+        let addr = baseAddr + i;
+        dumpHTML += `<span class="mem-addr">${addr.toString(16).padStart(4,'0').toUpperCase()}:</span> `;
+        for(let j=0; j<16; j++) {
+            let p = addr + j;
+            let v = mem.read(p).toString(16).padStart(2,'0').toUpperCase();
+            let cls = "mem-val";
+            if (p === cpu.pc) cls += " pc";
+            if (cpu.breakpoints.has(p)) cls += " bp";
+            dumpHTML += `<span class="${cls}" data-addr="${p}">${v}</span> `;
+        }
+        dumpHTML += '\n';
+    }
+    memDump.innerHTML = dumpHTML;
+}
+
+function varColor(name) { return getComputedStyle(document.body).getPropertyValue('--'+name).trim(); }
+
+memDump.addEventListener('click', (e) => {
+    if (e.target.classList.contains('mem-val')) {
+        let addr = parseInt(e.target.getAttribute('data-addr'));
+        if (cpu.breakpoints.has(addr)) {
+            cpu.breakpoints.delete(addr);
+            e.target.classList.remove('bp');
+        } else {
+            cpu.breakpoints.add(addr);
+            e.target.classList.add('bp');
+        }
+    }
+});
+
+function updateDisplay() {
+    if (!mem.vramDirty) return;
+    for (let i = 0; i < 1200; i++) {
+        let charCode = mem.vram[i];
+        let colorByte = mem.cram[i];
+        
+        let fg = PALETTE[colorByte & 0x0F];
+        let bg = PALETTE[(colorByte >> 4) & 0x0F];
+        
+        let char = ' ';
+        if (charCode >= 0x20 && charCode <= 0x7E) char = String.fromCharCode(charCode);
+        else if (charCode >= 0x00 && charCode <= 0x1F) char = GRAPHICS_CHARS[charCode];
+        
+        let cell = cells[i];
+        if (cell.textContent !== char) cell.textContent = char;
+        if (cell.style.color !== fg) cell.style.color = fg;
+        if (cell.style.backgroundColor !== bg) cell.style.backgroundColor = bg;
+    }
+    mem.vramDirty = false;
+}
+
+// --- EXECUTION LOOP ---
+let runInterval = null;
+let isRunning = false;
+let speedSettings = [1, 10, 1000, 50000, 500000]; 
+let speedLabels = ["1 Hz", "10 Hz", "1 KHz", "50 KHz", "~500 KHz (max)"];
+
+function stepCPU() {
+    if(!cpu.halted) {
+        if(cpu.breakpoints.has(cpu.pc)) {
+            stopSystem(); logMsg(`Breakpoint hit at 0x${cpu.pc.toString(16).padStart(4,'0')}`);
+            updateMonitor(); return;
+        }
+        cpu.step();
+        updateMonitor(); updateDisplay();
+    }
+}
+
+function runLoop() {
+    if (!isRunning || cpu.halted) { stopSystem(); return; }
+    let speedIdx = parseInt(document.getElementById('speed-slider').value);
+    let cps = speedSettings[speedIdx];
+    let cyclesPerFrame = Math.floor(cps / 60) || 1;
+    
+    let executed = 0;
+    while(executed < cyclesPerFrame && !cpu.halted) {
+        if(cpu.breakpoints.has(cpu.pc)) {
+            stopSystem(); logMsg(`Breakpoint hit at 0x${cpu.pc.toString(16).padStart(4,'0')}`);
+            break;
+        }
+        executed += cpu.step();
+    }
+    
+    updateMonitor(); updateDisplay();
+    if(isRunning) requestAnimationFrame(runLoop);
+}
+
+let slowTimer = null;
+function startSystem() {
+    if(isRunning) return;
+    isRunning = true; cpu.halted = false; logMsg("System running...");
+    
+    let speedIdx = parseInt(document.getElementById('speed-slider').value);
+    let cps = speedSettings[speedIdx];
+    
+    if (cps <= 10) {
+        slowTimer = setInterval(() => { stepCPU(); if(cpu.halted) stopSystem(); }, 1000 / cps);
+    } else { requestAnimationFrame(runLoop); }
+}
+
+function stopSystem() {
+    isRunning = false;
+    if(slowTimer) { clearInterval(slowTimer); slowTimer = null; }
+    logMsg("System stopped."); updateMonitor();
+}
+
+function resetSystem() {
+    stopSystem();
+    asm.assemble(BOOTLOADER_CODE, mem.rom);
+    for(let i=0; i<0x8000; i++) mem.ram[i] = 0;
+    cpu.reset();
+    logMsg("System Reset. Bootloader active.");
+    document.getElementById('serial-out').innerHTML = '';
+    updateMonitor(); window.updateFSUI();
+}
+
+// --- INPUT HANDLING ---
+document.getElementById('screen-container').addEventListener('click', () => {
+    document.getElementById('screen-container').style.borderColor = varColor('accent-color');
+    logMsg("Keyboard focus acquired. Press keys to send to IO A000.");
+});
+
+document.addEventListener('keydown', (e) => {
+    if (['code-editor', 'mem-page', 'serial-in'].includes(document.activeElement.id)) return;
+    if(e.key.length === 1) mem.write(0xA000, e.key.charCodeAt(0));
+    else if (e.key === 'Enter') mem.write(0xA000, 13);
+    else if (e.key === 'Backspace') mem.write(0xA000, 8);
+});
+
+document.addEventListener('click', (e) => {
+    if (!document.getElementById('screen-container').contains(e.target)) {
+        document.getElementById('screen-container').style.borderColor = '#222';
+    }
+});
+
+// --- EVENT LISTENERS ---
+document.getElementById('btn-assemble').addEventListener('click', () => {
+    let code = txtEditor.value;
+    let result = asm.assemble(code, mem.ram);
+    let status = document.getElementById('assemble-status');
+    if (result.errors.length > 0) {
+        status.textContent = "Assembly Failed!";
+        status.style.color = varColor('error-color');
+        for(let e of result.errors) logMsg(e, 'error');
+    } else {
+        status.textContent = "Assembled OK";
+        status.style.color = varColor('accent-color');
+        let dump = result.outputBinary.slice(0, 16).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+        logMsg(`Code built. Bin preview: ${dump}...`, 'success');
+        updateMonitor();
+    }
+});
+
+document.getElementById('speed-slider').addEventListener('input', (e) => {
+    document.getElementById('speed-label').textContent = speedLabels[e.target.value];
+    if(isRunning) { stopSystem(); startSystem(); }
+});
+
+document.getElementById('btn-run').addEventListener('click', startSystem);
+document.getElementById('btn-stop').addEventListener('click', stopSystem);
+document.getElementById('btn-step').addEventListener('click', stepCPU);
+document.getElementById('btn-reset').addEventListener('click', resetSystem);
+memPageIn.addEventListener('change', updateMonitor);
+
+// --- STRICT EXAMPLES ---
+const EXAMPLES = {
+    'hello': `; Hello World
+        ORG 0x0200
+START:  LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A         ; XY = 0x8000
+        
+        LDA #0x48       ; 'H'
+        ST [XY],A
+        INC XY
+        LDA #0x45       ; 'E'
+        ST [XY],A
+        INC XY
+        LDA #0x4C       ; 'L'
+        ST [XY],A
+        INC XY
+        LDA #0x4C       ; 'L'
+        ST [XY],A
+        INC XY
+        LDA #0x4F       ; 'O'
+        ST [XY],A
+        
+        HLT
+`,
+    'echo': `; Keyboard Echo
+        ORG 0x0200
+        LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A         
+        
+LOOP:   IN 0x00
+        LDB #0x00
+        SUB A,B         
+        JZ LOOP         
+        
+        ST [XY],A       
+        INC XY
+        
+        MOV A,Y
+        LDB #0x84
+        SUB A,B
+        JNZ LOOP        
+        
+        MOV A,X
+        LDB #0xB0
+        SUB A,B
+        JNZ LOOP        
+        
+        LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A
+        JMP LOOP
+`,
+    'sprite': `; Moving Sprite
+        ORG 0x0200
+START:  LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A
+        
+DRAW:   LDA #0x20       
+        ST [XY],A
+        INC XY
+        
+        MOV A,Y
+        LDB #0x84
+        SUB A,B
+        JNZ NO_WRAP_Y
+        MOV A,X
+        LDB #0xB0
+        SUB A,B
+        JNZ NO_WRAP_X
+        
+        LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A
+        JMP DRAW_OK
+        
+NO_WRAP_Y:
+NO_WRAP_X:
+
+DRAW_OK:LDA #0x12       
+        ST [XY],A
+        
+        LDA #0xFF
+DELAY:  LDB #0x01
+        SUB A,B
+        JNZ DELAY       
+        
+        JMP DRAW
+`,
+    'serial': `; Serial Comm (Requires Enhanced Mode)
+        ORG 0x0200
+        
+        ; Send "Boot\n" to host
+        LDA #0x42 ; B
+        OUT 0x09
+        LDA #0x6F ; o
+        OUT 0x09
+        LDA #0x6F ; o
+        OUT 0x09
+        LDA #0x74 ; t
+        OUT 0x09
+        LDA #0x0A ; \\n
+        OUT 0x09
+
+LOOP:   
+        ; Check if RX ready
+        IN 0x08
+        LDB #0x01
+        AND A,B
+        JZ LOOP         ; 0 = no data
+        
+        ; Read from RX, send back to TX
+        IN 0x09
+        OUT 0x09        ; Echo to host
+        
+        ; Also print to screen (simplified)
+        LDA #0x00
+        MOV X,A
+        LDA #0x80
+        MOV Y,A
+        IN 0x09         ; Note: reading again consumes next char if any
+        ; Actually better to save char
+        
+        JMP LOOP
+`,
+    'blank': `        ORG 0x0200\n        HLT\n`
+};
+
+document.getElementById('btn-load').addEventListener('click', () => {
+    let ex = document.getElementById('example-select').value;
+    txtEditor.value = EXAMPLES[ex];
+    logMsg(`Loaded example: ${ex}`);
+    if (ex === 'serial' && !ENHANCED_MODE) {
+        document.getElementById('chk-enhanced').click();
+    }
+});
+
+// INITIALIZATION
+resetSystem();
+txtEditor.value = EXAMPLES['hello'];
+logMsg("System initialized. Click 'Assemble to RAM', then 'RUN'.");
+
+</script>
+</body>
+</html>
+
+

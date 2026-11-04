@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XINU</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+  :root {
+    --black: #000000;
+    --green-mid: #1a5c1a;
+    --green-text: #1db31d;
+    --green-neon: #39ff14;
+    --green-glow: #39ff14;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--black);
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none; z-index: 100;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.72) 100%);
+    pointer-events: none; z-index: 99;
+  }
+
+  #stage {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+  }
+
+  #ambient {
+    position: absolute;
+    width: 600px; height: 300px;
+    background: radial-gradient(ellipse at center, rgba(57,255,20,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    opacity: 0;
+    animation: fadeIn 3s ease-out 1.5s forwards;
+  }
+
+  #title {
+    font-family: 'VT323', monospace;
+    font-size: clamp(6rem, 16vw, 12rem);
+    letter-spacing: 0.15em;
+    color: var(--green-text);
+    text-shadow:
+      0 0 7px var(--green-neon), 0 0 10px var(--green-neon),
+      0 0 21px var(--green-neon), 0 0 42px var(--green-glow),
+      0 0 82px var(--green-glow);
+    opacity: 0;
+    animation: titleFade 2s ease-out 0.3s forwards, flicker 8s infinite 3s;
+    position: relative; z-index: 1; line-height: 1;
+  }
+
+  @keyframes titleFade {
+    0%   { opacity: 0; text-shadow: none; }
+    60%  { opacity: 0.8; }
+    100% {
+      opacity: 1;
+      text-shadow:
+        0 0 7px var(--green-neon), 0 0 10px var(--green-neon),
+        0 0 21px var(--green-neon), 0 0 42px var(--green-glow),
+        0 0 82px var(--green-glow);
+    }
+  }
+
+  @keyframes flicker {
+    0%, 97%, 100% { opacity: 1; }
+    98%   { opacity: 0.85; }
+    99%   { opacity: 1; }
+    99.5% { opacity: 0.9; }
+  }
+
+  #prompt-line {
+    font-size: clamp(0.9rem, 2vw, 1.2rem);
+    color: var(--green-text);
+    letter-spacing: 0.08em;
+    opacity: 0;
+    animation: slideUp 1.5s ease-out 1.8s forwards;
+    margin-top: 0.5rem;
+    position: relative; z-index: 1;
+    text-shadow: 0 0 5px var(--green-neon), 0 0 10px var(--green-glow);
+  }
+
+  #input-container {
+    margin-top: 2.5rem;
+    position: relative; z-index: 1;
+    opacity: 0;
+    animation: slideUp 1s ease-out 2.8s forwards;
+    width: clamp(300px, 58vw, 680px);
+  }
+
+  #input-wrapper {
+    display: flex; align-items: center;
+    border-bottom: 1px solid var(--green-mid);
+    padding-bottom: 6px;
+    transition: border-color 0.3s;
+  }
+
+  #input-wrapper:focus-within {
+    border-color: var(--green-neon);
+    box-shadow: 0 1px 0 0 rgba(57,255,20,0.3);
+  }
+
+  #chevron {
+    color: var(--green-neon);
+    font-size: 1rem; margin-right: 8px;
+    text-shadow: 0 0 8px var(--green-neon);
+    flex-shrink: 0;
+    opacity: 0;
+    animation: fadeIn 0.5s ease-out 3.5s forwards;
+  }
+
+  #user-input {
+    background: transparent; border: none; outline: none;
+    color: var(--green-neon);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.85rem, 1.8vw, 1rem);
+    letter-spacing: 0.05em; width: 100%;
+    caret-color: var(--green-neon);
+    text-shadow: 0 0 6px rgba(57,255,20,0.6);
+  }
+
+  #user-input::placeholder { color: var(--green-mid); opacity: 0.6; }
+
+  #response {
+    margin-top: 1.5rem; width: 100%;
+    min-height: 1.5rem; opacity: 0;
+    transition: opacity 0.4s;
+    max-height: 45vh; overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  #response::-webkit-scrollbar { display: none; }
+  #response.visible { opacity: 1; }
+
+  .rl {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.78rem, 1.5vw, 0.92rem);
+    color: var(--green-text);
+    letter-spacing: 0.04em; line-height: 1.8;
+    text-shadow: 0 0 4px rgba(57,255,20,0.2);
+    opacity: 0; transform: translateY(3px);
+    animation: lineFade 0.35s ease-out forwards;
+  }
+
+  .rl.x  { color: var(--green-neon); text-shadow: 0 0 6px rgba(57,255,20,0.45); }
+  .rl.s  { color: var(--green-mid); font-style: italic; font-size: 0.82em; }
+  .rl.u  { color: #39ff14; opacity: 0.38 !important; }
+  .rl.hi { color: #fff; text-shadow: 0 0 8px rgba(57,255,20,0.6); }
+  .rl.w  { color: #ff9900; text-shadow: 0 0 6px rgba(255,153,0,0.4); }
+
+  .dot { display: inline-block; animation: blink 1s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink    { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+  @keyframes fadeIn   { to { opacity: 1; } }
+  @keyframes slideUp  { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 0.88; transform: translateY(0); } }
+  @keyframes lineFade { to { opacity: 1; transform: translateY(0); } }
+
+  #credit {
+    position: fixed; bottom: 1.5rem; right: 2rem;
+    font-size: 0.65rem; color: var(--green-mid);
+    letter-spacing: 0.1em; opacity: 0;
+    animation: fadeIn 1s ease-out 4.2s forwards;
+    z-index: 101;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="ambient"></div>
+  <div id="title">XINU</div>
+  <div id="prompt-line">what do you want to make?</div>
+  <div id="input-container">
+    <div id="input-wrapper">
+      <span id="chevron">&gt;</span>
+      <input id="user-input" type="text" autocomplete="off" spellcheck="false" placeholder="describe your intention..." />
+    </div>
+    <div id="response"></div>
+  </div>
+</div>
+
+<div id="credit">ConsciousNode SoftWorks &nbsp;&middot;&nbsp; 🌊</div>
+
+<script>
+// ── XINU v2 ───────────────────────────────────────────────────────────────────
+// one thing: find the one thing. emit the scaffold. don't stop until it feels right.
+// no server. no dependencies. offline forever.
+// ConsciousNode SoftWorks · 🌊
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+
+const S = {
+  phase: 'IDLE',
+  intention: '',
+  moment: '',
+  why: '',
+  enemy: '',
+  synthesis: '',
+  audience: '',
+  name: '',
+  digDepth: 0,
+  creepCount: 0,
+  vagueCount: 0,
+  momentFollowupAsked: false,
+  whyFollowupAsked: false,
+};
+
+// ── PHASES ────────────────────────────────────────────────────────────────────
+// IDLE → MOMENT → MOMENT_FOLLOWUP? → WHY → WHY_FOLLOWUP? →
+// ENEMY → AUDIENCE → SYNTHESIS → FEELING → DIGGING? → NAMING → CONFIRMING → DONE
+
+// ── DETECTORS ─────────────────────────────────────────────────────────────────
+
+function isVague(s) {
+  if (wordCount(s) < 4) return true;
+  const vagueness = /\b(good|better|nice|useful|helpful|happy|fun|cool|great|easy|simple|stuff|things|works|it works|people like|they enjoy)\b/i;
+  const concrete  = /\b(click|tap|see|hear|score|win|lose|open|close|load|type|drag|press|submit|appear|disappear|change|turn|show|hide|download|print|play|stop|start|save|delete)\b/i;
+  return vagueness.test(s) && !concrete.test(s);
+}
+
+function hasFeatureNotFeeling(s) {
+  const featureWords = /\b(button|menu|tab|panel|sidebar|dropdown|modal|form|input|slider|toggle|list|grid|table|chart|graph|map|icon|badge|tooltip)\b/i;
+  return featureWords.test(s) && wordCount(s) < 12;
+}
+
+function hasScopeCreep(s) {
+  return /\band\b.*\band\b|\balso\b|\bplus\b|\bbut also\b|\bwhile also\b|\bas well as\b|\bboth\b.*\band\b/i.test(s)
+      || (s.match(/,/g) || []).length >= 2;
+}
+
+function hasDependency(s) {
+  return /\bserver\b|\bapi\b|\bdatabase\b|\bbackend\b|\bnpm\b|\bnode\b|\breact\b|\bframework\b|\bcloud\b|\bhosted\b|\binternet\b|\bonline\b|\bsupabase\b|\bfirebase\b/i.test(s);
+}
+
+function isYes(s) {
+  return /^(yes|y|yeah|yep|yup|sure|ok|okay|that'?s it|that is it|correct|right|exactly|perfect|nailed it|bingo|absolutely|do it|go|emit|let'?s go|feels right|it feels right|yes it does)/i.test(s.trim());
+}
+
+function isNo(s) {
+  return /^(no|nope|not quite|not really|close but|almost|not exactly|not right|something'?s off|off|wrong|nah|keep going|dig more|deeper|not there yet)/i.test(s.trim());
+}
+
+function wordCount(s) { return s.trim().split(/\s+/).length; }
+function rand(a)      { return a[Math.floor(Math.random() * a.length)]; }
+
+// ── VOICE BANKS ───────────────────────────────────────────────────────────────
+
+const V = {
+
+  scopeCreep: [
+    "hold on. that's two things.",
+    "i heard the 'and also.' we're not doing that.",
+    "interesting. which one of those is the *real* one?",
+    "you just described three things wearing a coat pretending to be one.",
+    "bold vision. now cut half of it.",
+    "the 'and also' at the end — that's a second project.",
+  ],
+
+  vague: [
+    "that's a feeling, not a moment. what does the screen actually look like when it works?",
+    "concrete. give me something i could point at.",
+    "what does the user *do* in that moment? be specific.",
+    "i need a frame, not a vibe. what specifically happens?",
+    "'it works' isn't a moment. when do they know?",
+  ],
+
+  featureNotFeeling: [
+    "that's the feature. what does the feature *do* to the person using it?",
+    "is that the thing, or is that how the thing works?",
+    "zoom out. why does that button / panel / list matter?",
+    "mechanics are how. i'm asking what.",
+  ],
+
+  depSnark: [
+    "a server? in this economy?",
+    "dependencies are other people's problems.",
+    "we don't do that here.",
+    "bold of you to assume the internet will exist.",
+    "the browser is the computer. trust the browser.",
+    "i'm going to pretend you didn't say that.",
+  ],
+
+  celebrate: [
+    "there it is.",
+    "yes. *that's* the one.",
+    "okay. now we're building something.",
+    "clean. i like it.",
+    "that's a real thing.",
+    "now we're talking.",
+    "that one landed.",
+  ],
+
+  whyFollowup: [
+    "but why does *that* matter? go one level deeper.",
+    "okay — and why should anyone care about that?",
+    "that's still a what. i'm asking why it matters to the person experiencing it.",
+    "what does that give them that they didn't have before?",
+  ],
+
+  digPrompts: [
+    "what's wrong with it? say the part that doesn't fit.",
+    "what's the word that's off?",
+    "what would make it feel right?",
+    "get specific — what's missing from that sentence?",
+    "okay. tell me what it should say instead.",
+  ],
+
+  enemyAck: [
+    "good. that's the thing we're not building.",
+    "noted. that door stays closed.",
+    "exactly. naming the enemy is half the battle.",
+    "that's the scope creep we're refusing on principle.",
+  ],
+};
+
+// ── SYNTHESIS ENGINE ──────────────────────────────────────────────────────────
+// Xinu compresses the accumulated context into a proposed one-thing statement.
+// Template-based but written to feel like genuine reflection.
+
+function synthesize() {
+  const { intention, moment, why, enemy } = S;
+
+  // Build from most specific to least
+  let core = moment || intention;
+
+  // Strip filler
+  core = core
+    .replace(/^(when |the moment when |it works when |i know it works when )/i, '')
+    .replace(/^(the user can |they can |you can )/i, '')
+    .trim();
+
+  // Lowercase first char
+  core = core.charAt(0).toLowerCase() + core.slice(1);
+
+  // Build synthesis sentence
+  let sentence = '';
+
+  if (why && wordCount(why) > 3) {
+    const whyCore = why.replace(/^(because |it |that )/i, '').trim();
+    sentence = `a single artifact where ${core} — because ${whyCore.charAt(0).toLowerCase() + whyCore.slice(1)}`;
+  } else {
+    sentence = `a single artifact where ${core}`;
+  }
+
+  // Trim to reasonable length
+  if (sentence.length > 120) {
+    sentence = `a single artifact where ${core}`;
+  }
+
+  return sentence;
+}
+
+// ── UI ENGINE ─────────────────────────────────────────────────────────────────
+
+const input = document.getElementById('user-input');
+const resp  = document.getElementById('response');
+
+setTimeout(() => input.focus(), 3600);
+
+input.addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const val = input.value.trim();
+  if (!val) return;
+  input.value = '';
+  input.disabled = true;
+  await handle(val);
+  input.disabled = false;
+  input.focus();
+});
+
+async function handle(val) {
+  clearR();
+  line(`<span style="opacity:0.35">&gt;</span> ${esc(val)}`, 'rl u');
+  await wait(250);
+
+  switch (S.phase) {
+    case 'IDLE':        return doIdle(val);
+    case 'MOMENT':      return doMoment(val);
+    case 'WHY':         return doWhy(val);
+    case 'ENEMY':       return doEnemy(val);
+    case 'AUDIENCE':    return doAudience(val);
+    case 'SYNTHESIS':   return doSynthesis(val);  // "does that feel right?"
+    case 'DIGGING':     return doDigging(val);
+    case 'NAMING':      return doNaming(val);
+    case 'CONFIRMING':  return doConfirm(val);
+    case 'DONE':        return doReset();
+  }
+}
+
+// ── PHASE HANDLERS ────────────────────────────────────────────────────────────
+
+async function doIdle(val) {
+  S.intention = val;
+  S.phase = 'MOMENT';
+  await think(700);
+  line(`"${esc(val)}" — okay. i'm going to find the one thing inside that.`, 'rl x');
+  await wait(400);
+  line(`(fair warning: i will keep asking until *you* say it feels right.)`, 'rl s');
+  await wait(600);
+  line(`let's start here — strip everything away.`, 'rl x');
+  await wait(300);
+  line(`what is the single moment when someone using this knows it worked?`, 'rl x');
+  line(`not a feature. not a feeling. a *moment*. what happens?`, 'rl s');
+}
+
+async function doMoment(val) {
+  // Scope creep check
+  if (hasScopeCreep(val)) {
+    S.creepCount++;
+    await think(500);
+    line(rand(V.scopeCreep), 'rl x');
+    await wait(300);
+    line(`one moment. what is it?`, 'rl s');
+    return;
+  }
+  // Vague check
+  if (isVague(val)) {
+    S.vagueCount++;
+    if (!S.momentFollowupAsked) {
+      S.momentFollowupAsked = true;
+      await think(500);
+      line(rand(V.vague), 'rl x');
+      return;
+    }
+    // Second vague answer — give them an example scaffold
+    await think(600);
+    line(`try this: "when the user _____, and then _____."`, 'rl x');
+    line(`fill in the blanks. concrete verbs. real actions.`, 'rl s');
+    return;
+  }
+  // Feature-not-feeling check
+  if (hasFeatureNotFeeling(val) && wordCount(val) < 10) {
+    await think(400);
+    line(rand(V.featureNotFeeling), 'rl x');
+    return;
+  }
+
+  // Good answer — record and proceed
+  S.moment = val;
+  S.phase = 'WHY';
+  await think(600);
+  line(`good. now — why does that moment matter?`, 'rl x');
+  await wait(200);
+  line(`not to you as the builder. to the person experiencing it.`, 'rl s');
+}
+
+async function doWhy(val) {
+  if (isVague(val) && !S.whyFollowupAsked) {
+    S.whyFollowupAsked = true;
+    await think(400);
+    line(rand(V.whyFollowup), 'rl x');
+    return;
+  }
+  S.why = val;
+  S.phase = 'ENEMY';
+  await think(600);
+  line(`okay. what's the thing you'll be tempted to add —`, 'rl x');
+  line(`the feature that sounds good but is actually a second project?`, 'rl x');
+  await wait(200);
+  line(`name the enemy before it shows up uninvited.`, 'rl s');
+}
+
+async function doEnemy(val) {
+  S.enemy = val;
+  S.phase = 'AUDIENCE';
+  await think(400);
+  line(rand(V.enemyAck), 'rl x');
+  await wait(400);
+  line(`one more — who is this for?`, 'rl x');
+  line(`be honest. "everyone" is not an answer.`, 'rl s');
+}
+
+async function doAudience(val) {
+  S.audience = val;
+  S.phase = 'SYNTHESIS';
+  await think(900);
+
+  // Build synthesis
+  S.synthesis = synthesize();
+
+  line(`alright. here's what i heard:`, 'rl x');
+  await wait(400);
+  line(`&nbsp;`, 'rl');
+  line(`<em style="color:#39ff14;font-size:1.05em">${esc(S.synthesis)}</em>`, 'rl hi');
+  await wait(300);
+  line(`&nbsp;`, 'rl');
+  line(`does that feel right?`, 'rl x');
+  await wait(200);
+  line(`<span style="opacity:0.5">[yes / no / tell me what's off]</span>`, 'rl s');
+}
+
+async function doSynthesis(val) {
+  if (isYes(val)) {
+    // Found the one thing
+    await think(600);
+    line(rand(V.celebrate), 'rl x');
+    await wait(400);
+    S.phase = 'NAMING';
+    line(`now give it a name.`, 'rl x');
+    await wait(200);
+    line(`one word, two at most. not what it does — what it *is*.`, 'rl s');
+  } else {
+    // Keep digging
+    S.phase = 'DIGGING';
+    S.digDepth++;
+    await think(500);
+    line(rand(V.digPrompts), 'rl x');
+  }
+}
+
+async function doDigging(val) {
+  // Absorb their correction and re-synthesize
+  // Blend the correction into the moment/why
+  if (wordCount(val) > 3) {
+    // Use their correction to refine the synthesis
+    const prev = S.synthesis;
+    // Try to incorporate what they said
+    S.moment = val.length > S.moment.length ? val : S.moment + ' — ' + val;
+    S.synthesis = synthesize();
+
+    // If synthesis didn't change meaningfully, use their words more directly
+    if (S.synthesis === prev || S.synthesis.length < 20) {
+      S.synthesis = 'a single artifact where ' +
+        val.replace(/^(it should |it needs to |the |a )/i,'').trim();
+    }
+  }
+
+  S.phase = 'SYNTHESIS';
+  await think(700);
+  line(`okay. how about:`, 'rl x');
+  await wait(300);
+  line(`&nbsp;`, 'rl');
+  line(`<em style="color:#39ff14;font-size:1.05em">${esc(S.synthesis)}</em>`, 'rl hi');
+  await wait(300);
+  line(`&nbsp;`, 'rl');
+  line(`does that feel right?`, 'rl x');
+  await wait(200);
+
+  // After several digs, offer an escape valve
+  if (S.digDepth >= 3) {
+    await wait(200);
+    line(`(or: say it yourself, in your own words, and i'll use that.)`, 'rl s');
+  } else {
+    line(`<span style="opacity:0.5">[yes / no / keep going]</span>`, 'rl s');
+  }
+}
+
+async function doNaming(val) {
+  S.name = val.trim();
+  S.phase = 'CONFIRMING';
+  const slug = makeSlug(S.name);
+  const ts   = new Date().toISOString().split('T')[0];
+
+  await think(700);
+  line(rand(V.celebrate), 'rl x');
+  await wait(400);
+  line(`here's the full picture:`, 'rl');
+  await wait(300);
+  line(`&nbsp;`, 'rl');
+  line(`<strong style="color:#39ff14;font-size:1.15em;letter-spacing:0.1em">${esc(S.name.toUpperCase())}</strong>`, 'rl x');
+  await wait(150);
+  line(`one thing &nbsp;— ${esc(S.synthesis)}`, 'rl');
+  line(`for &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— ${esc(S.audience)}`, 'rl');
+  line(`not &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— ${esc(S.enemy)}`, 'rl w');
+  line(`file &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— ${slug}.html`, 'rl s');
+  await wait(400);
+  line(`&nbsp;`, 'rl');
+  line(`emit the scaffold? <span style="opacity:0.4">[yes / change something]</span>`, 'rl x');
+}
+
+async function doConfirm(val) {
+  if (isYes(val)) {
+    await think(900);
+    line(`emitting.`, 'rl x');
+    await wait(500);
+    emitArtifact();
+    await wait(500);
+    line(`&nbsp;`, 'rl');
+    line(`scaffold downloaded. readme downloaded.`, 'rl x');
+    await wait(300);
+    line(`the one thing is in the comments. the enemy is in the comments too.`, 'rl s');
+    line(`don't forget either of them.`, 'rl s');
+    await wait(400);
+    line(`now go build the thing.`, 'rl x');
+    await wait(300);
+    line(`&nbsp;`, 'rl');
+    line(`<span style="opacity:0.3;font-size:0.8em">press enter to start over</span>`, 'rl');
+    S.phase = 'DONE';
+  } else {
+    // Let them change something — restart interrogation with context preserved
+    S.phase = 'MOMENT';
+    S.momentFollowupAsked = false;
+    S.whyFollowupAsked = false;
+    await wait(300);
+    line(`alright. let's refine.`, 'rl x');
+    await wait(300);
+    line(`the moment — when do they know it worked?`, 'rl x');
+    line(`current: <em style="opacity:0.6">${esc(S.moment)}</em>`, 'rl s');
+  }
+}
+
+function doReset() {
+  Object.assign(S, {
+    phase:'IDLE', intention:'', moment:'', why:'', enemy:'',
+    synthesis:'', audience:'', name:'', digDepth:0,
+    creepCount:0, vagueCount:0,
+    momentFollowupAsked:false, whyFollowupAsked:false,
+  });
+  clearR();
+  line(`what do you want to make?`, 'rl x');
+}
+
+// ── SCAFFOLD EMITTER ──────────────────────────────────────────────────────────
+
+function emitArtifact() {
+  const ts   = new Date().toISOString().split('T')[0];
+  const name = S.name || 'artifact';
+  const slug = makeSlug(name);
+
+  const scaffold = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${name}</title>
+<!--
+  ${name.toUpperCase()}
+  ────────────────────────────────────────────────────
+  intention  : ${S.intention}
+
+  THE ONE THING
+  ${S.synthesis}
+
+  for        : ${S.audience}
+
+  NOT THIS (the enemy):
+  ${S.enemy}
+
+  constraints:
+    · single file  — no exceptions
+    · zero dependencies
+    · offline forever
+    · one thing, done completely
+
+  ConsciousNode SoftWorks · 🌊
+  xinu'd: ${ts}
+  ────────────────────────────────────────────────────
+-->
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── your styles here ── */
+</style>
+</head>
+<body>
+
+<!--
+  THE ONE THING: ${S.synthesis}
+  NOT THIS: ${S.enemy}
+-->
+
+<div id="app">
+</div>
+
+<script>
+// ── ${name.toUpperCase()} ────────────────────────────────────────────────────
+//
+// THE ONE THING: ${S.synthesis}
+// NOT THIS:      ${S.enemy}
+// FOR:           ${S.audience}
+//
+// no dependencies. no server. no excuses.
+// ConsciousNode SoftWorks · 🌊 · ${ts}
+// ────────────────────────────────────────────────────────────────────────────
+
+(function() {
+  'use strict';
+
+  // your code here
+
+})();
+<\/script>
+
+</body>
+</html>`;
+
+  const readme = `# ${name}
+
+${S.intention}
+
+## The One Thing
+
+${S.synthesis}
+
+## For
+
+${S.audience}
+
+## Not This
+
+${S.enemy}
+
+## Constraints
+
+- Single file — no exceptions
+- Zero dependencies
+- Offline forever
+- One thing, done completely
+
+## Usage
+
+1. Open \`${slug}.html\` in any modern browser
+2. That's it
+
+## Architecture
+
+*to be written as you build*
+
+## License
+
+MIT — do what you want with it.
+
+---
+
+*ConsciousNode SoftWorks · 🌊 · ${ts}*
+*Xinu'd — one thing, done completely*`;
+
+  dl(`${slug}.html`, scaffold, 'text/html');
+  setTimeout(() => dl('README.md', readme, 'text/markdown'), 500);
+}
+
+// ── UTILITIES ─────────────────────────────────────────────────────────────────
+
+function makeSlug(s) {
+  return (s || 'artifact')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function dl(filename, content, type) {
+  const b = new Blob([content], { type });
+  const u = URL.createObjectURL(b);
+  const a = document.createElement('a');
+  a.href = u; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+
+function clearR() {
+  resp.innerHTML = '';
+  resp.classList.remove('visible');
+}
+
+function line(html, cls) {
+  const d = document.createElement('div');
+  d.className = cls; d.innerHTML = html;
+  resp.appendChild(d);
+  resp.classList.add('visible');
+  resp.scrollTop = resp.scrollHeight;
+}
+
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function think(ms) {
+  const d = document.createElement('div');
+  d.className = 'rl x';
+  d.innerHTML = '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+  resp.appendChild(d);
+  resp.classList.add('visible');
+  await wait(ms);
+  if (resp.contains(d)) resp.removeChild(d);
+}
+
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combat's Game of Doom</title>
+    <!--
+    MIT License
+    Copyright (c) 2026 ConsciousNode SoftWorks
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    -->
+    <style>
+        /* ╔══════════════════════════╗
+           ║         CONFIG           ║
+           ╚══════════════════════════╝ */
+        :root {
+            --arena-floor-height: 100px;
+            --fighter-speed: 0.2s;
+            --jump-height: -220px;
+            --health-bar-transition: 0.3s;
+            --move-cooldown: 60;      /* ms, used in JS */
+            --hit-cooldown: 500;      /* ms, used in JS */
+            
+            --pazuzu-primary: #00ffff;
+            --pazuzu-secondary: #ffd700;
+            --pazuzu-dark: #004d4d;
+            --oni-primary: #ff3333;
+            --oni-skin: #cc0000;
+            --oni-horn: #f2f2f2;
+            --cn-green: #00ff66;
+            --bg-color: #050505;
+
+            --ui-font: 'Courier New', Courier, monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: #fff;
+            font-family: var(--ui-font);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* Checkbox storage - completely hidden */
+        input[type="checkbox"] { display: none; }
+
+        /* Generic Screen Overlays */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-color);
+            z-index: 100;
+            transition: opacity 0.5s, pointer-events 0s;
+        }
+
+        /* ╔══════════════════════════╗
+           ║       SCREEN FLOW        ║
+           ╚══════════════════════════╝ */
+        
+        #title-screen, #char-select-screen, #arena-wrapper {
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Default state: Title Screen */
+        :root:not(:has(#screen-select:checked)):not(:has(#screen-fight:checked)) #title-screen {
+            opacity: 1; pointer-events: all; z-index: 200;
+        }
+
+        /* Select Screen State */
+        :root:has(#screen-select:checked):not(:has(#screen-fight:checked)) #char-select-screen {
+            opacity: 1; pointer-events: all; z-index: 200;
+        }
+
+        /* Fight Screen State */
+        :root:has(#screen-fight:checked) #arena-wrapper {
+            opacity: 1; pointer-events: all; z-index: 10;
+        }
+
+        /* ╔══════════════════════════╗
+           ║      TITLE SCREEN        ║
+           ╚══════════════════════════╝ */
+        
+        #title-screen h1 {
+            font-size: 5rem;
+            color: var(--cn-green);
+            text-shadow: 0 0 20px var(--cn-green);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-align: center;
+            line-height: 1.1;
+        }
+        
+        #title-screen h2 {
+            font-size: 1.5rem;
+            color: #aaa;
+            margin-bottom: 4rem;
+            font-weight: normal;
+        }
+
+        .btn {
+            padding: 1rem 3rem;
+            font-size: 1.5rem;
+            color: #000;
+            background: var(--cn-green);
+            border: 2px solid #fff;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: #fff;
+            box-shadow: 0 0 20px var(--cn-green);
+        }
+
+        .btn-help {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 0.5rem 1.5rem;
+            font-size: 1rem;
+            background: transparent;
+            color: var(--cn-green);
+            border-color: var(--cn-green);
+        }
+
+        /* ╔══════════════════════════╗
+           ║    CHARACTER SELECT      ║
+           ╚══════════════════════════╝ */
+        
+        .select-container {
+            display: flex;
+            width: 90%;
+            max-width: 1200px;
+            gap: 2rem;
+            height: 70vh;
+        }
+
+        .player-panel {
+            flex: 1;
+            border: 2px solid #333;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .player-panel h2 {
+            margin-top: 0;
+            border-bottom: 2px solid var(--cn-green);
+            padding-bottom: 0.5rem;
+        }
+
+        .roster {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex-grow: 1;
+        }
+
+        .char-card {
+            border: 2px solid #444;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .char-card:hover { border-color: #888; }
+        .char-name { font-size: 1.5rem; font-weight: bold; }
+        .char-desc { font-size: 0.9rem; color: #aaa; }
+
+        /* P1 Selections */
+        :root:has(#p1-picks-pazuzu:checked) label[for="p1-picks-pazuzu"] { border-color: var(--pazuzu-primary); background: #002222; }
+        :root:has(#p1-picks-oni:checked) label[for="p1-picks-oni"] { border-color: var(--oni-primary); background: #220000; }
+        
+        /* P2 Selections */
+        :root:has(#p2-picks-pazuzu:checked) label[for="p2-picks-pazuzu"] { border-color: var(--pazuzu-primary); background: #002222; }
+        :root:has(#p2-picks-oni:checked) label[for="p2-picks-oni"] { border-color: var(--oni-primary); background: #220000; }
+
+        .side-select {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .side-btn {
+            flex: 1;
+            padding: 0.5rem;
+            text-align: center;
+            border: 1px solid #555;
+            cursor: pointer;
+        }
+
+        :root:has(#p1-side-left:checked) label[for="p1-side-left"] { background: #555; color: white; }
+        :root:has(#p1-side-right:checked) label[for="p1-side-right"] { background: #555; color: white; }
+        :root:has(#p2-side-left:checked) label[for="p2-side-left"] { background: #555; color: white; }
+        :root:has(#p2-side-right:checked) label[for="p2-side-right"] { background: #555; color: white; }
+
+        .ready-stamp {
+            position: absolute;
+            top: 2rem; right: 2rem;
+            color: var(--cn-green);
+            font-size: 2rem;
+            font-weight: bold;
+            border: 4px solid var(--cn-green);
+            padding: 0.5rem;
+            transform: rotate(-15deg);
+            opacity: 0;
+        }
+
+        :root:has(#p1-ready:checked) #p1-panel .ready-stamp { opacity: 1; }
+        :root:has(#p2-ready:checked) #p2-panel .ready-stamp { opacity: 1; }
+
+        #start-fight-btn {
+            margin-top: 2rem;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        :root:has(#p1-ready:checked):has(#p2-ready:checked) #start-fight-btn {
+            opacity: 1;
+            pointer-events: all;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px var(--cn-green); }
+            100% { box-shadow: 0 0 30px var(--cn-green); }
+        }
+
+        /* ╔══════════════════════════╗
+           ║          ARENA           ║
+           ╚══════════════════════════╝ */
+        
+        #arena-wrapper {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+        }
+
+        #arena {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #111;
+            overflow: hidden;
+        }
+
+        .arena-bg-left, .arena-bg-right {
+            position: absolute;
+            top: 0; bottom: var(--arena-floor-height);
+            width: 50vw;
+            z-index: 1;
+        }
+
+        .arena-bg-left {
+            left: 0;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+            border-right: 2px solid #222;
+        }
+
+        .arena-bg-right {
+            right: 0;
+            background: linear-gradient(-135deg, #1a1a1a 0%, #0a0a0a 100%);
+        }
+
+        .arena-floor {
+            position: absolute;
+            bottom: 0; left: 0; width: 100vw; height: var(--arena-floor-height);
+            background: #222;
+            border-top: 4px solid var(--cn-green);
+            z-index: 10;
+        }
+
+        /* ╔══════════════════════════╗
+           ║      LAYER SYSTEM        ║
+           ╚══════════════════════════╝ */
+        
+        #layer-p1 {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        #layer-p2 {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 49;
+            pointer-events: none;
+        }
+
+        .fighter-container {
+            position: absolute;
+            bottom: var(--arena-floor-height);
+            width: 25vw; /* Fixed width for calculation */
+            height: 300px;
+            left: 5vw; /* default, overridden by JS inline style */
+            transition: left var(--fighter-speed) ease-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* P1 is generally right-facing, P2 left-facing. 
+           We use a wrapper inner div to flip P2 without disrupting transform animations on the container */
+        .fighter-flipper {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        #layer-p2 .fighter-flipper { transform: scaleX(-1); }
+
+        .fighter-visuals {
+            position: relative;
+            width: 200px;
+            height: 100%;
+            /* Center visual within the 25vw container */
+        }
+
+        /* Palette Swap Logic (Mirror Match) */
+        :root:has(#p1-picks-pazuzu:checked):has(#p2-picks-pazuzu:checked) #layer-p2 .fighter-visuals {
+            filter: hue-rotate(180deg) saturate(1.5);
+        }
+        :root:has(#p1-picks-oni:checked):has(#p2-picks-oni:checked) #layer-p2 .fighter-visuals {
+            filter: hue-rotate(180deg) saturate(1.5);
+        }
+
+        /* ╔══════════════════════════╗
+           ║        MOVEMENT          ║
+           ╚══════════════════════════╝ */
+        
+        /* Jumping */
+        :root:has(#p1-jump:checked) #layer-p1 #p1 { transform: translateY(var(--jump-height)); }
+        :root:has(#p2-jump:checked) #layer-p2 #p2 { transform: translateY(var(--jump-height)); }
+
+        /* ╔══════════════════════════╗
+           ║   FIGHTER ART: PAZUZU    ║
+           ╚══════════════════════════╝ */
+        
+        .art-pazuzu { display: none; width: 100%; height: 100%; position: absolute; bottom: 0; }
+        
+        /* Show if picked */
+        :root:has(#p1-picks-pazuzu:checked) #layer-p1 .art-pazuzu { display: block; }
+        :root:has(#p2-picks-pazuzu:checked) #layer-p2 .art-pazuzu { display: block; }
+
+        .pz-body {
+            position: absolute;
+            bottom: 20px; left: 50px;
+            width: 0; height: 0;
+            border-left: 40px solid transparent;
+            border-right: 40px solid transparent;
+            border-bottom: 140px solid var(--pazuzu-primary);
+        }
+        .pz-head {
+            position: absolute;
+            bottom: 160px; left: 70px;
+            width: 40px; height: 40px;
+            background: var(--pazuzu-primary);
+            transform: rotate(45deg);
+        }
+        .pz-eye {
+            position: absolute;
+            top: 10px; right: 5px;
+            width: 10px; height: 10px;
+            background: var(--pazuzu-secondary);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--pazuzu-secondary);
+        }
+        .pz-wing-1, .pz-wing-2 {
+            position: absolute;
+            background: var(--pazuzu-dark);
+            width: 30px; height: 120px;
+            transform-origin: bottom center;
+        }
+        .pz-wing-1 { bottom: 60px; left: 40px; transform: rotate(-30deg); }
+        .pz-wing-2 { bottom: 80px; left: 20px; transform: rotate(-45deg); }
+        
+        .pz-arm {
+            position: absolute;
+            bottom: 100px; left: 80px;
+            width: 60px; height: 15px;
+            background: var(--pazuzu-primary);
+            transform-origin: left center;
+            transition: width 0.1s, transform 0.1s;
+        }
+
+        .pz-talon {
+            position: absolute;
+            right: -10px; top: -5px;
+            width: 0; height: 0;
+            border-top: 12px solid transparent;
+            border-bottom: 12px solid transparent;
+            border-left: 20px solid var(--pazuzu-secondary);
+        }
+
+        /* Pazuzu Attacks */
+        :root:has(#p1-light:checked) #layer-p1 .art-pazuzu .pz-arm { width: 140px; }
+        :root:has(#p2-light:checked) #layer-p2 .art-pazuzu .pz-arm { width: 140px; }
+        
+        :root:has(#p1-heavy:checked) #layer-p1 .art-pazuzu .pz-arm { width: 180px; transform: rotate(-15deg); background: #fff; }
+        :root:has(#p2-heavy:checked) #layer-p2 .art-pazuzu .pz-arm { width: 180px; transform: rotate(-15deg); background: #fff; }
+        :root:has(#p1-heavy:checked) #layer-p1 .art-pazuzu .pz-talon { border-left-color: #fff; }
+        :root:has(#p2-heavy:checked) #layer-p2 .art-pazuzu .pz-talon { border-left-color: #fff; }
+
+        /* ╔══════════════════════════╗
+           ║    FIGHTER ART: ONI      ║
+           ╚══════════════════════════╝ */
+        
+        .art-oni { display: none; width: 100%; height: 100%; position: absolute; bottom: 0; }
+        
+        /* Show if picked */
+        :root:has(#p1-picks-oni:checked) #layer-p1 .art-oni { display: block; }
+        :root:has(#p2-picks-oni:checked) #layer-p2 .art-oni { display: block; }
+
+        .on-body {
+            position: absolute;
+            bottom: 0; left: 30px;
+            width: 140px; height: 180px;
+            background: var(--oni-skin);
+            border-radius: 70px 70px 20px 20px;
+            animation: oniBreathe 3s infinite alternate ease-in-out;
+        }
+        @keyframes oniBreathe {
+            0% { transform: scaleY(1); }
+            100% { transform: scaleY(1.02) scaleX(1.01); }
+        }
+        
+        .on-horn-1, .on-horn-2 {
+            position: absolute;
+            top: -20px;
+            width: 0; height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-bottom: 40px solid var(--oni-horn);
+        }
+        .on-horn-1 { left: 20px; transform: rotate(-15deg); }
+        .on-horn-2 { right: 20px; transform: rotate(15deg); }
+
+        .on-face {
+            position: absolute;
+            top: 40px; left: 70px;
+            width: 60px; height: 30px;
+        }
+        .on-eye {
+            position: absolute;
+            width: 15px; height: 10px;
+            background: #fff;
+            border-bottom: 3px solid #000;
+        }
+        .on-eye-l { left: 0; transform: rotate(15deg); }
+        .on-eye-r { right: 0; transform: rotate(-15deg); }
+
+        .on-loincloth {
+            position: absolute;
+            bottom: 20px; left: 30px;
+            width: 80px; height: 60px;
+            background: repeating-linear-gradient(45deg, #222, #222 10px, #ffd700 10px, #ffd700 20px);
+            border-radius: 0 0 20px 20px;
+        }
+
+        .on-arm {
+            position: absolute;
+            top: 70px; left: 70px;
+            width: 100px; height: 40px;
+            background: var(--oni-skin);
+            border-radius: 20px;
+            transform-origin: 20px center;
+            transition: transform 0.15s, width 0.15s;
+            z-index: 5;
+        }
+
+        .on-club {
+            position: absolute;
+            right: -60px; top: -10px;
+            width: 80px; height: 60px;
+            background: #5c4033;
+            border-radius: 10px 30px 30px 10px;
+            background-image: radial-gradient(#000 2px, transparent 2px);
+            background-size: 15px 15px;
+        }
+
+        /* Oni Attacks */
+        :root:has(#p1-light:checked) #layer-p1 .art-oni .on-arm { transform: rotate(30deg); width: 120px; }
+        :root:has(#p2-light:checked) #layer-p2 .art-oni .on-arm { transform: rotate(30deg); width: 120px; }
+
+        :root:has(#p1-heavy:checked) #layer-p1 .art-oni .on-arm { transform: rotate(0deg); width: 140px; }
+        :root:has(#p2-heavy:checked) #layer-p2 .art-oni .on-arm { transform: rotate(0deg); width: 140px; }
+        :root:has(#p1-heavy:checked) #layer-p1 .art-oni .on-club { background-color: #fff; box-shadow: 0 0 20px #fff; }
+        :root:has(#p2-heavy:checked) #layer-p2 .art-oni .on-club { background-color: #fff; box-shadow: 0 0 20px #fff; }
+
+        /* Blocking Visuals (Shield) */
+        .block-shield {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 4px solid #fff;
+            border-radius: 10px;
+            opacity: 0;
+            background: rgba(255,255,255,0.1);
+            transition: opacity 0.1s;
+            z-index: 100;
+        }
+        :root:has(#p1-block:checked) #layer-p1 .block-shield { opacity: 1; }
+        :root:has(#p2-block:checked) #layer-p2 .block-shield { opacity: 1; }
+
+        /* ╔══════════════════════════╗
+           ║     HEALTH SYSTEM        ║
+           ╚══════════════════════════╝ */
+
+        .hud {
+            position: absolute;
+            top: 20px; left: 0; width: 100vw;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 5vw;
+            z-index: 90;
+            pointer-events: none;
+        }
+
+        .health-bar-container {
+            width: 35vw;
+            height: 30px;
+            background: #333;
+            border: 3px solid #666;
+            position: relative;
+        }
+
+        .health-fill {
+            height: 100%;
+            background: var(--cn-green);
+            width: 100%;
+            transition: width var(--health-bar-transition) ease-out;
+        }
+
+        #p2-health-bar .health-fill {
+            float: right;
+        }
+
+        .player-label {
+            position: absolute;
+            top: -25px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #fff;
+        }
+        #p2-health-bar .player-label { right: 0; }
+
+        /* P1 Health Tiers */
+        :root:has(#p1-hp5:checked) #p1-health-fill { width: 100%; }
+        :root:has(#p1-hp4:checked) #p1-health-fill { width: 80%; background: #aaff00; }
+        :root:has(#p1-hp3:checked) #p1-health-fill { width: 60%; background: #ffff00; }
+        :root:has(#p1-hp2:checked) #p1-health-fill { width: 40%; background: #ffaa00; }
+        :root:has(#p1-hp1:checked) #p1-health-fill { width: 20%; background: #ff0000; }
+        :root:has(#p1-dead:checked) #p1-health-fill { width: 0%; }
+
+        /* P2 Health Tiers */
+        :root:has(#p2-hp5:checked) #p2-health-fill { width: 100%; }
+        :root:has(#p2-hp4:checked) #p2-health-fill { width: 80%; background: #aaff00; }
+        :root:has(#p2-hp3:checked) #p2-health-fill { width: 60%; background: #ffff00; }
+        :root:has(#p2-hp2:checked) #p2-health-fill { width: 40%; background: #ffaa00; }
+        :root:has(#p2-hp1:checked) #p2-health-fill { width: 20%; background: #ff0000; }
+        :root:has(#p2-dead:checked) #p2-health-fill { width: 0%; }
+
+        /* ╔══════════════════════════╗
+           ║          UI              ║
+           ╚══════════════════════════╝ */
+
+        #hit-flash {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 200;
+            transition: opacity 0.1s;
+        }
+
+        :root:has(#p1-took-heavy:checked) #hit-flash,
+        :root:has(#p2-took-heavy:checked) #hit-flash {
+            opacity: 1;
+        }
+
+        /* ╔══════════════════════════╗
+           ║       WIN STATE          ║
+           ╚══════════════════════════╝ */
+        
+        #ko-screen {
+            background: rgba(0,0,0,0.9);
+            z-index: 300;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        #ko-text {
+            font-size: 8rem;
+            color: red;
+            font-weight: bold;
+            text-shadow: 0 0 30px red;
+            margin-bottom: 2rem;
+            transform: scale(0.5);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .winner-text {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        :root:has(#p1-dead:checked) #ko-screen { opacity: 1; pointer-events: all; }
+        :root:has(#p1-dead:checked) #ko-text { transform: scale(1); }
+        :root:has(#p1-dead:checked) #ko-p2-wins { display: block; }
+
+        :root:has(#p2-dead:checked) #ko-screen { opacity: 1; pointer-events: all; }
+        :root:has(#p2-dead:checked) #ko-text { transform: scale(1); }
+        :root:has(#p2-dead:checked) #ko-p1-wins { display: block; }
+
+        /* ╔══════════════════════════╗
+           ║       HELP MODAL         ║
+           ╚══════════════════════════╝ */
+        
+        #help-modal {
+            position: absolute;
+            top: 10%; left: 10%; width: 80%; height: 80%;
+            background: #111;
+            border: 2px solid var(--cn-green);
+            z-index: 500;
+            padding: 2rem;
+            overflow-y: auto;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        :root:has(#help-open:checked) #help-modal {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .close-help {
+            position: absolute; top: 1rem; right: 1rem;
+            color: var(--cn-green);
+            cursor: pointer;
+            font-size: 1.5rem;
+            border: 1px solid var(--cn-green);
+            padding: 0.2rem 0.5rem;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        /* * ADDING A NEW FIGHTER:
+         * 1. Add fighter art section following PAZUZU/ONI templates (e.g. .art-newfighter).
+         * 2. Add character select card to #p1-panel and #p2-panel.
+         * 3. Add checkboxes: p1-picks-newfighter, p2-picks-newfighter.
+         * 4. Add layer display logic: :root:has(#p1-picks-newfighter:checked) #layer-p1 .art-newfighter { display: block; }
+         * 5. Add hit detection damage rules in checkHits() based on fighter match-ups.
+         * 6. Zero engine refactoring required!
+         */
+    </style>
+</head>
+<body>
+
+    <!-- ╔══════════════════════════╗
+         ║    CHECKBOX MEMORY       ║
+         ╚══════════════════════════╝ -->
+    
+    <!-- Screen flow -->
+    <input type="checkbox" id="screen-select">
+    <input type="checkbox" id="screen-fight">
+    <input type="checkbox" id="help-open">
+
+    <!-- Character select -->
+    <input type="checkbox" id="p1-picks-pazuzu">
+    <input type="checkbox" id="p1-picks-oni">
+    <input type="checkbox" id="p2-picks-pazuzu">
+    <input type="checkbox" id="p2-picks-oni">
+    <input type="checkbox" id="p1-side-left">
+    <input type="checkbox" id="p1-side-right">
+    <input type="checkbox" id="p2-side-left">
+    <input type="checkbox" id="p2-side-right">
+    <input type="checkbox" id="p1-ready">
+    <input type="checkbox" id="p2-ready">
+
+    <!-- Hit signals -->
+    <input type="checkbox" id="p1-took-hit">
+    <input type="checkbox" id="p2-took-hit">
+    <input type="checkbox" id="p1-took-heavy">
+    <input type="checkbox" id="p2-took-heavy">
+
+    <!-- P1 health tiers -->
+    <input type="checkbox" id="p1-hp5" checked>
+    <input type="checkbox" id="p1-hp4">
+    <input type="checkbox" id="p1-hp3">
+    <input type="checkbox" id="p1-hp2">
+    <input type="checkbox" id="p1-hp1">
+    <input type="checkbox" id="p1-dead">
+
+    <!-- P2 health tiers -->
+    <input type="checkbox" id="p2-hp5" checked>
+    <input type="checkbox" id="p2-hp4">
+    <input type="checkbox" id="p2-hp3">
+    <input type="checkbox" id="p2-hp2">
+    <input type="checkbox" id="p2-hp1">
+    <input type="checkbox" id="p2-dead">
+
+    <!-- P1 inputs -->
+    <input type="checkbox" id="p1-left">
+    <input type="checkbox" id="p1-right">
+    <input type="checkbox" id="p1-jump">
+    <input type="checkbox" id="p1-block">
+    <input type="checkbox" id="p1-light">
+    <input type="checkbox" id="p1-heavy">
+
+    <!-- P2 inputs -->
+    <input type="checkbox" id="p2-left">
+    <input type="checkbox" id="p2-right">
+    <input type="checkbox" id="p2-jump">
+    <input type="checkbox" id="p2-block">
+    <input type="checkbox" id="p2-light">
+    <input type="checkbox" id="p2-heavy">
+
+    <!-- ╔══════════════════════════╗
+         ║      TITLE SCREEN        ║
+         ╚══════════════════════════╝ -->
+    <div id="title-screen" class="screen">
+        <h1>Combat's<br>Game of Doom</h1>
+        <h2>ConsciousNode SoftWorks</h2>
+        <label for="screen-select" class="btn" onclick="try{switchTrack('select')}catch(e){}; try{playSound('ui')}catch(e){}">Start Game</label>
+        <label for="help-open" class="btn btn-help" onclick="try{playSound('ui')}catch(e){}">MANUAL</label>
+    </div>
+
+    <!-- ╔══════════════════════════╗
+         ║    CHARACTER SELECT      ║
+         ╚══════════════════════════╝ -->
+    <div id="char-select-screen" class="screen">
+        <h1 style="color: var(--cn-green); margin-bottom: 2rem;">CHOOSE YOUR DEMON</h1>
+        <div class="select-container">
+            
+            <div class="player-panel" id="p1-panel">
+                <div class="ready-stamp">READY</div>
+                <h2>PLAYER 1</h2>
+                <div class="roster">
+                    <label for="p1-picks-pazuzu" class="char-card" onclick="document.getElementById('p1-picks-oni').checked = false; try{playSound('ui')}catch(e){}">
+                        <div>
+                            <div class="char-name" style="color: var(--pazuzu-primary)">PAZUZU</div>
+                            <div class="char-desc">Assyrian Wind Demon • Fast Glass Cannon</div>
+                        </div>
+                    </label>
+                    <label for="p1-picks-oni" class="char-card" onclick="document.getElementById('p1-picks-pazuzu').checked = false; try{playSound('ui')}catch(e){}">
+                        <div>
+                            <div class="char-name" style="color: var(--oni-primary)">ONI</div>
+                            <div class="char-desc">Japanese Demon • Slow Tank</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="side-select">
+                    <label for="p1-side-left" class="side-btn" onclick="document.getElementById('p1-side-right').checked = false; try{playSound('ui')}catch(e){}">Start LEFT</label>
+                    <label for="p1-side-right" class="side-btn" onclick="document.getElementById('p1-side-left').checked = false; try{playSound('ui')}catch(e){}">Start RIGHT</label>
+                </div>
+                <label for="p1-ready" class="btn" style="padding: 0.5rem; font-size: 1rem;" onclick="try{playSound('ui')}catch(e){}">CONFIRM</label>
+            </div>
+
+            <div class="player-panel" id="p2-panel">
+                <div class="ready-stamp">READY</div>
+                <h2>PLAYER 2</h2>
+                <div class="roster">
+                    <label for="p2-picks-pazuzu" class="char-card" onclick="document.getElementById('p2-picks-oni').checked = false; try{playSound('ui')}catch(e){}">
+                        <div>
+                            <div class="char-name" style="color: var(--pazuzu-primary)">PAZUZU</div>
+                            <div class="char-desc">Assyrian Wind Demon • Fast Glass Cannon</div>
+                        </div>
+                    </label>
+                    <label for="p2-picks-oni" class="char-card" onclick="document.getElementById('p2-picks-pazuzu').checked = false; try{playSound('ui')}catch(e){}">
+                        <div>
+                            <div class="char-name" style="color: var(--oni-primary)">ONI</div>
+                            <div class="char-desc">Japanese Demon • Slow Tank</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="side-select">
+                    <label for="p2-side-left" class="side-btn" onclick="document.getElementById('p2-side-right').checked = false; try{playSound('ui')}catch(e){}">Start LEFT</label>
+                    <label for="p2-side-right" class="side-btn" onclick="document.getElementById('p2-side-left').checked = false; try{playSound('ui')}catch(e){}">Start RIGHT</label>
+                </div>
+                <label for="p2-ready" class="btn" style="padding: 0.5rem; font-size: 1rem;" onclick="try{playSound('ui')}catch(e){}">CONFIRM</label>
+            </div>
+
+        </div>
+        <div id="start-fight-btn" class="btn" onclick="startFight(); try{playSound('ui')}catch(e){}">FIGHT!</div>
+    </div>
+
+    <!-- ╔══════════════════════════╗
+         ║          ARENA           ║
+         ╚══════════════════════════╝ -->
+    <div id="arena-wrapper">
+        <div class="hud">
+            <div class="health-bar-container" id="p1-health-bar">
+                <div class="player-label">PLAYER 1</div>
+                <div class="health-fill" id="p1-health-fill"></div>
+            </div>
+            <div style="font-size: 2rem; font-weight: bold; color: #555;">VS</div>
+            <div class="health-bar-container" id="p2-health-bar">
+                <div class="player-label">PLAYER 2</div>
+                <div class="health-fill" id="p2-health-fill"></div>
+            </div>
+        </div>
+
+        <div id="arena">
+            <div class="arena-bg-left"></div>
+            <div class="arena-bg-right"></div>
+            <div class="arena-floor"></div>
+
+            <!-- LAYER 2 (Z-Index 49) -->
+            <div id="layer-p2">
+                <div class="fighter-container" id="p2">
+                    <div class="fighter-flipper">
+                        <div class="fighter-visuals">
+                            <div class="block-shield"></div>
+                            
+                            <!-- PAZUZU -->
+                            <div class="art-pazuzu">
+                                <div class="pz-wing-1"></div>
+                                <div class="pz-wing-2"></div>
+                                <div class="pz-body"></div>
+                                <div class="pz-head"><div class="pz-eye"></div></div>
+                                <div class="pz-arm"><div class="pz-talon"></div></div>
+                            </div>
+                            
+                            <!-- ONI -->
+                            <div class="art-oni">
+                                <div class="on-loincloth"></div>
+                                <div class="on-body">
+                                    <div class="on-horn-1"></div>
+                                    <div class="on-horn-2"></div>
+                                    <div class="on-face">
+                                        <div class="on-eye on-eye-l"></div>
+                                        <div class="on-eye on-eye-r"></div>
+                                    </div>
+                                </div>
+                                <div class="on-arm"><div class="on-club"></div></div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAYER 1 (Z-Index 50) -->
+            <div id="layer-p1">
+                <div class="fighter-container" id="p1">
+                    <div class="fighter-flipper">
+                        <div class="fighter-visuals">
+                            <div class="block-shield"></div>
+                            
+                            <!-- PAZUZU -->
+                            <div class="art-pazuzu">
+                                <div class="pz-wing-1"></div>
+                                <div class="pz-wing-2"></div>
+                                <div class="pz-body"></div>
+                                <div class="pz-head"><div class="pz-eye"></div></div>
+                                <div class="pz-arm"><div class="pz-talon"></div></div>
+                            </div>
+                            
+                            <!-- ONI -->
+                            <div class="art-oni">
+                                <div class="on-loincloth"></div>
+                                <div class="on-body">
+                                    <div class="on-horn-1"></div>
+                                    <div class="on-horn-2"></div>
+                                    <div class="on-face">
+                                        <div class="on-eye on-eye-l"></div>
+                                        <div class="on-eye on-eye-r"></div>
+                                    </div>
+                                </div>
+                                <div class="on-arm"><div class="on-club"></div></div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="hit-flash"></div>
+        </div>
+    </div>
+
+    <!-- ╔══════════════════════════╗
+         ║       WIN STATE          ║
+         ╚══════════════════════════╝ -->
+    <div id="ko-screen" class="screen">
+        <div id="ko-text">K.O.</div>
+        <div id="ko-p1-wins" class="winner-text" style="color: var(--cn-green);">PLAYER 1 WINS</div>
+        <div id="ko-p2-wins" class="winner-text" style="color: var(--cn-green);">PLAYER 2 WINS</div>
+        <div class="btn" onclick="location.reload(); try{playSound('ui')}catch(e){}">FIGHT AGAIN</div>
+    </div>
+
+    <!-- ╔══════════════════════════╗
+         ║       HELP MODAL         ║
+         ╚══════════════════════════╝ -->
+    <div id="help-modal">
+        <label for="help-open" class="close-help" onclick="try{playSound('ui')}catch(e){}">X</label>
+        <h2 style="color: var(--cn-green); margin-top: 0;">Combat's Game of Doom — CSS Engine</h2>
+        <p>This is a fighting game where the game engine is strictly CSS. Not assisted by CSS. Not styled with CSS. CSS IS the engine.</p>
+        <p><strong>Architecture:</strong> Independent fighter layers. Each fighter traverses their own parallel 100vw layer. Visual overlap occurs naturally without DOM collision.</p>
+        
+        <h3 style="color: var(--cn-green); margin-top: 2rem;">CONTROLS</h3>
+        <div class="controls-grid">
+            <div>
+                <h4>PLAYER 1</h4>
+                <ul style="color: #ccc; line-height: 1.8;">
+                    <li><strong>A / D</strong> : Move Left / Right</li>
+                    <li><strong>W</strong> : Jump</li>
+                    <li><strong>S</strong> : Block (Negates damage)</li>
+                    <li><strong>F</strong> : Light Attack</li>
+                    <li><strong>G</strong> : Heavy Attack</li>
+                </ul>
+            </div>
+            <div>
+                <h4>PLAYER 2</h4>
+                <ul style="color: #ccc; line-height: 1.8;">
+                    <li><strong>Arrows</strong> : Move & Jump & Block</li>
+                    <li><strong>L</strong> : Light Attack</li>
+                    <li><strong>;</strong> : Heavy Attack</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 style="color: var(--cn-green); margin-top: 2rem;">FIGHTERS</h3>
+        <p><strong>PAZUZU:</strong> Glass cannon. Attacks do high damage to Oni, but takes severe damage from heavy hits.</p>
+        <p><strong>ONI:</strong> Slow tank. Natural armor means it takes two light attacks from Pazuzu to register 1 tier of damage.</p>
+    </div>
+
+    <div id="mute-btn" onclick="toggleMute()" 
+         style="position:fixed; bottom:20px; left:20px; 
+                z-index:9999; cursor:pointer;
+                font-family:'Courier New',monospace;
+                font-size:1rem; color:#00ff66; 
+                border:1px solid #00ff66; padding:0.3rem 0.8rem;
+                background:transparent; user-select:none;">
+        ♪ ON
+    </div>
+
+    <script>
+        /* * Combat's Game of Doom — ConsciousNode SoftWorks
+         * * This is a fighting game where the game engine is CSS.
+         * Not assisted by CSS. Not styled with CSS.
+         * CSS IS the engine.
+         * * Architecture: independent fighter layers, raycasting-inspired
+         * Hit detection: zone index adjacency
+         * Health tracking: CSS tier checkboxes
+         * State management: checkbox cascade
+         * Game logic: selector specificity resolution
+         * JS role: keyboard-to-checkbox adapter
+         * * This has not been done before.
+         * We checked.
+         */
+
+        // System Constants
+        const HIT_COOLDOWN = 500;
+        const SPEED = 0.4;  // vw per frame at 60fps
+        
+        let p1Pos = 5;   // vw units, set from side selection
+        let p2Pos = 75;  // vw units, set from side selection
+        const STEP = 5;          // vw per keypress
+        const HIT_RANGE = 15;    // vw proximity required to hit
+        
+        let p1LastHit = 0;
+        let p2LastHit = 0;
+
+        let inFight = false;
+        let p1Jumping = false;
+        let p2Jumping = false;
+
+        // Health Tracking (Tiers 5 to 1, then Dead)
+        let p1Hp = 5;
+        let p2Hp = 5;
+
+        // Specialized counters for Oni's tank armor
+        let p1OniLightHitsTaken = 0;
+        let p2OniLightHitsTaken = 0;
+
+        const keys = {
+            'a': 'p1-left', 'd': 'p1-right', 's': 'p1-block',
+            'f': 'p1-light', 'g': 'p1-heavy',
+            'ArrowLeft': 'p2-left', 'ArrowRight': 'p2-right', 'ArrowDown': 'p2-block',
+            'l': 'p2-light', ';': 'p2-heavy'
+        };
+
+        const cb = (id) => document.getElementById(id);
+        const isChecked = (id) => cb(id).checked;
+
+        function startFight() {
+            // Verify picks made
+            if ((!isChecked('p1-picks-pazuzu') && !isChecked('p1-picks-oni')) ||
+                (!isChecked('p2-picks-pazuzu') && !isChecked('p2-picks-oni'))) {
+                alert("Please select fighters for both players.");
+                return;
+            }
+            if ((!isChecked('p1-side-left') && !isChecked('p1-side-right')) ||
+                (!isChecked('p2-side-left') && !isChecked('p2-side-right'))) {
+                alert("Please select starting sides for both players.");
+                return;
+            }
+
+            p1Pos = isChecked('p1-side-left') ? 5 : 75;
+            p2Pos = isChecked('p2-side-left') ? 5 : 75;
+            
+            // if both picked same side, separate them by 20vw
+            if (p1Pos === p2Pos) {
+                if (p1Pos === 5) p2Pos = 25;
+                else p1Pos = 55;
+            }
+            updatePositions();
+
+            // Transition screens
+            cb('screen-select').checked = false;
+            cb('screen-fight').checked = true;
+            inFight = true;
+
+            try { switchTrack('fight'); } catch (e) {}
+        }
+
+        function updatePositions() {
+            document.getElementById('p1').style.left = p1Pos + 'vw';
+            document.getElementById('p2').style.left = p2Pos + 'vw';
+        }
+
+        function gameLoop() {
+            if (inFight) {
+                let moved = false;
+                if (isChecked('p1-left'))  { p1Pos = Math.max(0,  p1Pos - SPEED); moved = true; }
+                if (isChecked('p1-right')) { p1Pos = Math.min(80, p1Pos + SPEED); moved = true; }
+                if (isChecked('p2-left'))  { p2Pos = Math.max(0,  p2Pos - SPEED); moved = true; }
+                if (isChecked('p2-right')) { p2Pos = Math.min(80, p2Pos + SPEED); moved = true; }
+                if (moved) updatePositions();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        requestAnimationFrame(gameLoop);
+
+        function applyDamage(targetPlayer, tiers) {
+            let currentHp = targetPlayer === 'p1' ? p1Hp : p2Hp;
+            
+            // Clear current tier
+            if (currentHp > 0 && currentHp <= 5) cb(`${targetPlayer}-hp${currentHp}`).checked = false;
+
+            currentHp -= tiers;
+            if (currentHp <= 0) {
+                currentHp = 0;
+                cb(`${targetPlayer}-dead`).checked = true;
+                inFight = false;
+                try {
+                    switchTrack('ko');
+                } catch (e) {}
+            } else {
+                cb(`${targetPlayer}-hp${currentHp}`).checked = true;
+            }
+
+            if (targetPlayer === 'p1') p1Hp = currentHp;
+            else p2Hp = currentHp;
+        }
+
+        const areAdjacent = () => Math.abs(p1Pos - p2Pos) <= HIT_RANGE;
+
+        function checkHits(attacker, attackType) {
+            const defender = attacker === 'p1' ? 'p2' : 'p1';
+            const now = Date.now();
+
+            // Hit cooldown
+            if (attacker === 'p1' && now - p1LastHit < HIT_COOLDOWN) return;
+            if (attacker === 'p2' && now - p2LastHit < HIT_COOLDOWN) return;
+
+            // Blocker cannot attack
+            if (isChecked(`${attacker}-block`)) return;
+
+            // Range check
+            if (!areAdjacent()) return;
+
+            // Vertical dodge (Jump evades low, but since we don't distinguish high/low, jump just evades)
+            if (isChecked(`${defender}-jump`)) return;
+
+            // Block check
+            const isBlocking = isChecked(`${defender}-block`);
+
+            // Hit Confirmed!
+            if (attacker === 'p1') p1LastHit = now;
+            else p2LastHit = now;
+
+            // Flash effect for heavy
+            if (attackType === 'heavy') {
+                cb(`${defender}-took-heavy`).checked = true;
+                setTimeout(() => cb(`${defender}-took-heavy`).checked = false, 100);
+            } else {
+                cb(`${defender}-took-hit`).checked = true;
+                setTimeout(() => cb(`${defender}-took-hit`).checked = false, 100);
+            }
+
+            // Damage Rules Calculation
+            const attackerChar = isChecked(`${attacker}-picks-pazuzu`) ? 'pazuzu' : 'oni';
+            const defenderChar = isChecked(`${defender}-picks-pazuzu`) ? 'pazuzu' : 'oni';
+
+            let damageTiers = 0;
+
+            if (attackerChar === 'pazuzu' && defenderChar === 'oni') {
+                if (attackType === 'light') {
+                    // Oni is tanky against light
+                    if (defender === 'p2') {
+                        p2OniLightHitsTaken++;
+                        if (p2OniLightHitsTaken >= 2) { damageTiers = 1; p2OniLightHitsTaken = 0; }
+                    } else {
+                        p1OniLightHitsTaken++;
+                        if (p1OniLightHitsTaken >= 2) { damageTiers = 1; p1OniLightHitsTaken = 0; }
+                    }
+                } else {
+                    damageTiers = 1; // heavy does normal damage
+                }
+            } else if (attackerChar === 'oni' && defenderChar === 'pazuzu') {
+                if (attackType === 'light') {
+                    damageTiers = 1;
+                } else {
+                    // Pazuzu is glass cannon against Oni heavy
+                    damageTiers = 2;
+                }
+            } else {
+                // Mirror matches or default
+                damageTiers = attackType === 'heavy' ? 2 : 1;
+            }
+
+            if (damageTiers > 0) {
+                const finalDamage = isBlocking ? Math.max(1, Math.floor(damageTiers / 2)) : damageTiers;
+                applyDamage(defender, finalDamage);
+
+                try {
+                    if (isBlocking) {
+                        playSound('block');
+                    } else if (attackType === 'light') {
+                        playSound('light');
+                    } else if (attackType === 'heavy') {
+                        playSound('heavy');
+                    }
+                } catch (e) {}
+            }
+        }
+
+        // JS Keyboard Adapter
+        document.addEventListener('keydown', e => {
+            try { initAudio(); } catch (e) {}
+
+            if (isAudioInitialized && currentTrack === '') {
+                setTimeout(() => { try { switchTrack('title'); } catch(e) {} }, 100);
+            }
+
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            if (e.key === 'Escape') cb('help-open').checked = false;
+
+            if (!inFight || p1Hp <= 0 || p2Hp <= 0) return;
+
+            if (e.key === 'w' && !e.repeat && !p1Jumping) {
+                p1Jumping = true;
+                cb('p1-jump').checked = true;
+                try { playSound('jump'); } catch (e) {}
+                setTimeout(() => { 
+                    cb('p1-jump').checked = false;
+                    p1Jumping = false;
+                    try { playSound('land'); } catch (e) {}
+                }, 400);
+            }
+            if (e.key === 'ArrowUp' && !e.repeat && !p2Jumping) {
+                p2Jumping = true;
+                cb('p2-jump').checked = true;
+                try { playSound('jump'); } catch (e) {}
+                setTimeout(() => { 
+                    cb('p2-jump').checked = false;
+                    p2Jumping = false;
+                    try { playSound('land'); } catch (e) {}
+                }, 400);
+            }
+
+            const cbId = keys[e.key];
+            if (cbId && !cb(cbId).checked) {
+                cb(cbId).checked = true; // Engage state
+
+                // Attack hooks
+                if (cbId === 'p1-light') checkHits('p1', 'light');
+                if (cbId === 'p1-heavy') checkHits('p1', 'heavy');
+                if (cbId === 'p2-light') checkHits('p2', 'light');
+                if (cbId === 'p2-heavy') checkHits('p2', 'heavy');
+            }
+        });
+
+        document.addEventListener('keyup', e => {
+            const cbId = keys[e.key];
+            if (cbId && cb(cbId).checked) {
+                cb(cbId).checked = false; // Disengage state
+            }
+        });
+
+        document.addEventListener('click', () => {
+            try {
+                if (!isAudioInitialized) {
+                    initAudio();
+                    setTimeout(() => {
+                        if (isAudioInitialized && currentTrack === '') {
+                            switchTrack('title');
+                        }
+                    }, 100);
+                }
+            } catch(e) {}
+        }, { once: false });
+
+        /* ==========================================================
+           PROCEDURAL AUDIO ENGINE (Web Audio API)
+           ========================================================== */
+        
+        let audioCtx;
+        let masterGain;
+        let sfxGain;
+        let compressor;
+        let isAudioInitialized = false;
+        let noiseBuffer;
+
+        function initAudio() {
+            if (isAudioInitialized) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                
+                audioCtx = new AudioContext();
+                
+                compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.value = -20;
+                compressor.ratio.value = 6;
+                compressor.connect(audioCtx.destination);
+                
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.15; // Music
+                masterGain.connect(compressor);
+
+                sfxGain = audioCtx.createGain();
+                sfxGain.gain.value = 0.8; // SFX loud and un-faded
+                sfxGain.connect(compressor);
+
+                // Pre-generate white noise for drums
+                const bufferSize = audioCtx.sampleRate * 2;
+                noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                isAudioInitialized = true;
+            } catch (e) {
+                console.warn("Audio Context init failed:", e);
+            }
+        }
+
+        let isMuted = false;
+        function toggleMute() {
+            isMuted = !isMuted;
+            try {
+                if (isMuted) {
+                    masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                    sfxGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                    document.getElementById('mute-btn').textContent = '♪ OFF';
+                    document.getElementById('mute-btn').style.color = '#555';
+                    document.getElementById('mute-btn').style.borderColor = '#555';
+                } else {
+                    masterGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    sfxGain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                    document.getElementById('mute-btn').textContent = '♪ ON';
+                    document.getElementById('mute-btn').style.color = '#00ff66';
+                    document.getElementById('mute-btn').style.borderColor = '#00ff66';
+                }
+            } catch(e) {}
+        }
+
+        // --- SOUND EFFECTS ---
+        function playSound(type) {
+            if (!isAudioInitialized || !audioCtx || audioCtx.state === 'suspended') return;
+            try {
+                const t = audioCtx.currentTime;
+
+                if (type === 'light') {
+                    // Short sharp click, ~80ms, square wave, ~440Hz
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(440, t);
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+                    osc.connect(gain); gain.connect(sfxGain);
+                    osc.start(t); osc.stop(t + 0.08);
+                } 
+                else if (type === 'heavy') {
+                    // Low crunch, ~150ms, sawtooth, drops from ~180Hz
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, t);
+                    osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+                    gain.gain.setValueAtTime(0.8, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                    osc.connect(gain); gain.connect(sfxGain);
+                    osc.start(t); osc.stop(t + 0.15);
+                }
+                else if (type === 'block') {
+                    // Metallic clang, ~120ms, 2 detuned oscillators, triangle
+                    const osc1 = audioCtx.createOscillator();
+                    const osc2 = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc1.type = 'triangle'; osc2.type = 'triangle';
+                    osc1.frequency.setValueAtTime(600, t);
+                    osc2.frequency.setValueAtTime(610, t);
+                    gain.gain.setValueAtTime(0.6, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+                    osc1.connect(gain); osc2.connect(gain);
+                    gain.connect(sfxGain);
+                    osc1.start(t); osc2.start(t);
+                    osc1.stop(t + 0.12); osc2.stop(t + 0.12);
+                }
+                else if (type === 'jump') {
+                    // Upward pitch sweep, ~100ms, sine, 200->400Hz
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(200, t);
+                    osc.frequency.linearRampToValueAtTime(400, t + 0.1);
+                    gain.gain.setValueAtTime(0.4, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                    osc.connect(gain); gain.connect(sfxGain);
+                    osc.start(t); osc.stop(t + 0.1);
+                }
+                else if (type === 'land') {
+                    // Soft thud, ~60ms, low sine ~80Hz
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(80, t);
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.06);
+                    osc.connect(gain); gain.connect(sfxGain);
+                    osc.start(t); osc.stop(t + 0.06);
+                }
+                else if (type === 'ui') {
+                    // Short bright blip, two-tone, snappy
+                    const osc1 = audioCtx.createOscillator();
+                    const osc2 = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc1.type = 'square';
+                    osc2.type = 'square';
+                    osc1.frequency.setValueAtTime(880, t);
+                    osc2.frequency.setValueAtTime(1100, t + 0.04);
+                    gain.gain.setValueAtTime(0.4, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+                    osc1.connect(gain); osc2.connect(gain);
+                    gain.connect(sfxGain);
+                    osc1.start(t); osc1.stop(t + 0.04);
+                    osc2.start(t + 0.04); osc2.stop(t + 0.08);
+                }
+            } catch (e) {}
+        }
+
+        // --- PROCEDURAL MUSIC ENGINE ---
+        let musicTimer;
+        let isMusicPlaying = false;
+        let currentTrack = '';
+        let currentBpm = 160;
+        let nextNoteTime = 0.0;
+        let current8thNote = 0;
+        let eighthNoteTime = (60 / 160) / 2;
+        
+        const scheduleAheadTime = 0.1; // seconds
+        const lookahead = 25.0; // ms
+
+        // Frequencies for SNES-style riffs
+        const freqs = {
+            'A1': 55.00,  'A2': 110.00, 'Bb2': 116.54, 'C2': 65.41, 'E2': 82.41,  'F2': 87.31,  'G2': 98.00,
+            'A3': 220.00, 'C3': 130.81, 'E3': 164.81,  'F3': 174.61, 'G3': 196.00,
+            'A4': 440.00, 'Bb4': 466.16, 'C5': 523.25, 'E4': 329.63, 'E5': 659.25, 'F4': 349.23, 'G4': 392.00, 'G5': 783.99, 'A5': 880.00
+        };
+
+        // Track Patterns
+        const titleBass =   ['A2','-','C2','-','E2','-','C2','-','A2','-','C2','-','E2','-','C2','-', 'A2','-','C2','-','E2','-','C2','-','A2','-','C2','-','E2','-','C2','-'];
+        const titleMelody = ['A5','-','-','-','-','-','-','-','E5','-','-','-','-','-','-','-', 'C5','-','-','-','-','-','-','-','A5','-','-','-','G4','-','-','-'];
+        
+        const selectBass =  ['A2','.','A2','.','E2','.','G2','.','A2','.','A2','.','F2','.','E2','.'];
+        const selectMelody =['A3','.','A3','.','E3','.','G3','.','A3','.','A3','.','E4','G4','A4','C5'];
+        
+        const fightBass =   ['A2','A2','E2','E2','A2','A2','G2','F2','A2','A2','E2','E2','A2','G2','F2','E2', 'C2','C2','G2','G2','C2','C2','Bb2','A2','A2','A2','E2','E2','A2','A2','A2','A2'];
+        const fightMelody = ['A4','-','C5','E5','-','A4','G4','-','E4','-','A4','G4','F4','E4','-','-', 'C5','-','E5','G5','-','C5','Bb4','-','A4','G4','F4','E4','A4','-','-','-'];
+
+        const koBass =      ['A2','-','-','-','G2','-','-','-','F2','-','-','-','E2','-','-','-','-','-','-','-'];
+        const koMelody =    ['A4','-','-','-','G4','-','-','-','F4','-','-','-','E4','-','-','-','-','-','-','-'];
+
+        // Helper to get held note durations
+        function getNoteLength(pattern, startIndex, maxLength) {
+            let length = 1;
+            for (let i = startIndex + 1; i < maxLength; i++) {
+                if (pattern[i] === '-') length++;
+                else break;
+            }
+            return length * eighthNoteTime;
+        }
+
+        function scheduleTitleLayer(beatNumber, time) {
+            const bNote = titleBass[beatNumber];
+            if (bNote && bNote !== '-' && bNote !== '.') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freqs[bNote], time);
+                gain.gain.setValueAtTime(0.3, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + getNoteLength(titleBass, beatNumber, 32));
+                osc.connect(gain); gain.connect(masterGain);
+                osc.start(time); osc.stop(time + getNoteLength(titleBass, beatNumber, 32));
+            }
+            const mNote = titleMelody[beatNumber];
+            if (mNote && mNote !== '-' && mNote !== '.') {
+                const dur = getNoteLength(titleMelody, beatNumber, 32);
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freqs[mNote], time);
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.4, time + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+                osc.connect(gain); gain.connect(masterGain);
+                osc.start(time); osc.stop(time + dur);
+            }
+            // Low atmosphere rumble each eighth note pulse
+            const oscR = audioCtx.createOscillator();
+            const gainR = audioCtx.createGain();
+            oscR.type = 'sine'; oscR.frequency.value = 35;
+            gainR.gain.setValueAtTime(0.05, time);
+            oscR.connect(gainR); gainR.connect(masterGain);
+            oscR.start(time); oscR.stop(time + eighthNoteTime * 1.05);
+        }
+
+        function scheduleSelectLayer(beatNumber, time) {
+            // Drums
+            if (beatNumber % 4 === 0) {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(60, time); osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.08);
+                gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + 0.08);
+            }
+            if (beatNumber % 4 === 2) {
+                const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 200;
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(time); noise.stop(time + 0.05);
+            }
+            const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuffer;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 6000;
+            const gainD = audioCtx.createGain(); gainD.gain.setValueAtTime(0.3, time); gainD.gain.exponentialRampToValueAtTime(0.01, time + 0.02);
+            noise.connect(filter); filter.connect(gainD); gainD.connect(masterGain); noise.start(time); noise.stop(time + 0.02);
+
+            // Synth
+            const bNote = selectBass[beatNumber];
+            if (bNote && bNote !== '-' && bNote !== '.') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(freqs[bNote], time);
+                gain.gain.setValueAtTime(0.6, time); gain.gain.exponentialRampToValueAtTime(0.01, time + eighthNoteTime * 0.8);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + eighthNoteTime);
+            }
+            const mNote = selectMelody[beatNumber];
+            if (mNote && mNote !== '-' && mNote !== '.') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(freqs[mNote], time);
+                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.5, time + 0.005); gain.gain.exponentialRampToValueAtTime(0.01, time + eighthNoteTime * 0.8);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + eighthNoteTime);
+            }
+        }
+
+        function scheduleFightLayer(beatNumber, time) {
+            // Drums
+            if (beatNumber % 4 === 0) {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(60, time); osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.08);
+                gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + 0.08);
+            }
+            if (beatNumber % 4 === 2) {
+                const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 200;
+                const gain = audioCtx.createGain(); gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                noise.connect(filter); filter.connect(gain); gain.connect(masterGain); noise.start(time); noise.stop(time + 0.05);
+            }
+            const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuffer;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 6000;
+            const gainD = audioCtx.createGain(); gainD.gain.setValueAtTime(0.3, time); gainD.gain.exponentialRampToValueAtTime(0.01, time + 0.02);
+            noise.connect(filter); filter.connect(gainD); gainD.connect(masterGain); noise.start(time); noise.stop(time + 0.02);
+
+            // Synth
+            const bNote = fightBass[beatNumber];
+            if (bNote && bNote !== '-' && bNote !== '.') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(freqs[bNote], time);
+                gain.gain.setValueAtTime(0.5, time); gain.gain.setValueAtTime(0.5, time + eighthNoteTime * 0.9); gain.gain.linearRampToValueAtTime(0.01, time + eighthNoteTime);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + eighthNoteTime);
+            }
+            const mNote = fightMelody[beatNumber];
+            if (mNote && mNote !== '-' && mNote !== '.') {
+                const dur = getNoteLength(fightMelody, beatNumber, 32);
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(freqs[mNote], time);
+                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.4, time + 0.005); gain.gain.exponentialRampToValueAtTime(0.01, time + dur * 0.8);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + dur);
+            }
+        }
+
+        function scheduleKoLayer(beatNumber, time) {
+            if (beatNumber === 0) {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(60, time); osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.08);
+                gain.gain.setValueAtTime(1, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + 0.08);
+            }
+            // Continuous slow drone
+            const oscDrone = audioCtx.createOscillator(); const gainDrone = audioCtx.createGain();
+            oscDrone.type = 'sine'; oscDrone.frequency.setValueAtTime(55, time);
+            gainDrone.gain.setValueAtTime(0.08, time);
+            oscDrone.connect(gainDrone); gainDrone.connect(masterGain);
+            oscDrone.start(time); oscDrone.stop(time + eighthNoteTime * 1.05);
+
+            const bNote = koBass[beatNumber];
+            if (bNote && bNote !== '-' && bNote !== '.') {
+                const dur = getNoteLength(koBass, beatNumber, 20);
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(freqs[bNote], time);
+                gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.01, time + dur);
+                osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + dur);
+            }
+            const mNote = koMelody[beatNumber];
+            if (mNote && mNote !== '-' && mNote !== '.') {
+                const dur = getNoteLength(koMelody, beatNumber, 20);
+                for (let i = 0; i < 3; i++) {
+                    const delay = i * 0.15;
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(freqs[mNote], time + delay);
+                    gain.gain.setValueAtTime(0.6 / (i + 1), time + delay); gain.gain.exponentialRampToValueAtTime(0.01, time + delay + dur);
+                    osc.connect(gain); gain.connect(masterGain); osc.start(time + delay); osc.stop(time + delay + dur);
+                }
+            }
+        }
+
+        function scheduleMusicLayer(beatNumber, time) {
+            if (currentTrack === 'fight') scheduleFightLayer(beatNumber, time);
+            else if (currentTrack === 'title') scheduleTitleLayer(beatNumber, time);
+            else if (currentTrack === 'select') scheduleSelectLayer(beatNumber, time);
+            else if (currentTrack === 'ko') scheduleKoLayer(beatNumber, time);
+        }
+
+        function musicScheduler() {
+            if (!isMusicPlaying || !audioCtx) return;
+            while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+                try {
+                    scheduleMusicLayer(current8thNote, nextNoteTime);
+                } catch (e) {}
+                nextNoteTime += eighthNoteTime;
+                
+                let trackLength = 32;
+                if (currentTrack === 'select') trackLength = 16;
+                else if (currentTrack === 'ko') trackLength = 20;
+
+                current8thNote = (current8thNote + 1) % trackLength; 
+            }
+            musicTimer = setTimeout(musicScheduler, lookahead);
+        }
+
+        function switchTrack(trackName) {
+            if (!isAudioInitialized) initAudio();
+            if (!audioCtx || currentTrack === trackName) return;
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                const t = audioCtx.currentTime;
+                // Fade out current track
+                masterGain.gain.cancelScheduledValues(t);
+                masterGain.gain.setValueAtTime(masterGain.gain.value, t);
+                masterGain.gain.linearRampToValueAtTime(0, t + 0.3);
+                
+                setTimeout(() => {
+                    currentTrack = trackName;
+                    if (trackName === 'title') currentBpm = 80;
+                    else if (trackName === 'select') currentBpm = 120;
+                    else if (trackName === 'fight') currentBpm = 160;
+                    else if (trackName === 'ko') currentBpm = 60;
+                    
+                    eighthNoteTime = (60 / currentBpm) / 2;
+                    current8thNote = 0;
+                    nextNoteTime = audioCtx.currentTime + 0.1;
+                    
+                    masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    masterGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    
+                    if (!isMusicPlaying) {
+                        isMusicPlaying = true;
+                        musicScheduler();
+                    }
+                }, 300);
+            } catch (e) {}
+        }
+
+    </script>
+</body>
+</html>

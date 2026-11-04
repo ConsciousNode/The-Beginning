@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Junto — Swarm Language Orchestrator</title>
+<style>
+/* JUNTO ORCHESTRATOR STYLESHEET
+   Dark theme matching HTMLNLM aesthetic
+   MIT License - ConsciousNode SoftWorks
+*/
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #171717;
+  --bg-tertiary: #262626;
+  --border: #404040;
+  --accent: #14b8a6;
+  --accent-dim: #0f766e;
+  --accent-glow: rgba(20, 184, 166, 0.2);
+  --text-main: #f5f5f5;
+  --text-muted: #a3a3a3;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius: 12px;
+  --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body, html { height: 100%; background: var(--bg-primary); color: var(--text-main); font-family: var(--font-sans); font-size: 14px; overflow: hidden; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+#app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+header { display: flex; align-items: center; padding: 16px 24px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); z-index: 20; box-shadow: 0 2px 10px rgba(0,0,0,0.3); flex-wrap: wrap; gap: 12px; }
+header h1 { color: var(--accent); font-size: 20px; font-weight: 800; font-family: var(--font-mono); letter-spacing: -0.5px; margin-right: 8px; }
+.subtitle { color: var(--text-muted); font-size: 13px; font-weight: 500; display: none; }
+@media (min-width: 600px) { .subtitle { display: block; } }
+
+.status-pill { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-glow); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--accent-dim); letter-spacing: 0.5px; white-space: nowrap; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1); }
+.status-dot.offline { background: var(--error); box-shadow: 0 0 10px var(--error); animation: none; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
+
+/* CSS State Machine logic */
+input[type="radio"][name="route"] { display: none; }
+
+nav { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; z-index: 15; }
+nav::-webkit-scrollbar { display: none; }
+.nav-tab { padding: 16px 24px; cursor: pointer; color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; border-bottom: 2px solid transparent; transition: all var(--transition-fast); white-space: nowrap; user-select: none; }
+.nav-tab:hover { color: var(--text-main); background: var(--bg-tertiary); }
+
+/* Routing Triggers */
+body:has(#route-swarm:checked) .nav-tab[for="route-swarm"],
+body:has(#route-vocab:checked) .nav-tab[for="route-vocab"],
+body:has(#route-generate:checked) .nav-tab[for="route-generate"],
+body:has(#route-log:checked) .nav-tab[for="route-log"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-primary); }
+
+.screen { display: none; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 24px; gap: 24px; align-content: flex-start; flex: 1; }
+body:has(#route-swarm:checked) #screen-swarm { display: flex; flex-direction: column; }
+body:has(#route-vocab:checked) #screen-vocab { display: flex; flex-direction: column; }
+body:has(#route-generate:checked) #screen-generate { display: flex; flex-direction: column; }
+body:has(#route-log:checked) #screen-log { display: flex; flex-direction: column; }
+
+/* UI Components */
+.panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; box-shadow: var(--shadow); transition: transform var(--transition-fast); position: relative; overflow: hidden; }
+.panel-header { font-family: var(--font-mono); color: var(--text-main); font-size: 13px; font-weight: 700; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px; }
+
+.control-group { margin-bottom: 24px; }
+.control-group label { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 13px; margin-bottom: 10px; font-weight: 600; }
+.control-group input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; height: 6px; background: var(--bg-tertiary); border-radius: 4px; appearance: none; outline: none; margin-top: 4px; }
+.control-group input[type="range"]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; transition: transform 0.1s; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+.control-group input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.control-group input[type="text"], .control-group textarea, .control-group input[type="number"] { width: 100%; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-main); font-family: var(--font-mono); font-size: 13px; padding: 14px; border-radius: 8px; outline: none; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+.control-group input[type="text"]:focus, .control-group textarea:focus, .control-group input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.control-group textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+.val-display { color: var(--accent); font-weight: 700; font-family: var(--font-mono); background: var(--bg-primary); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+.val-input { color: var(--accent); font-weight: 700; font-family: var(--font-mono); background: var(--bg-primary); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); width: 80px; text-align: right; outline: none; -moz-appearance: textfield; }
+.val-input::-webkit-outer-spin-button, .val-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.val-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+
+/* Interactive Elements */
+.btn { padding: 14px 20px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-main); font-family: var(--font-sans); font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 8px; transition: all var(--transition-fast); text-align: center; letter-spacing: 0.5px; user-select: none; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+.btn:hover:not(:disabled) { background: var(--bg-primary); border-color: var(--accent); color: var(--accent); box-shadow: 0 4px 12px var(--accent-glow); transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+.btn.primary { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--accent); color: #000; }
+.btn.danger { border-color: var(--error); color: var(--error); background: rgba(239, 68, 68, 0.05); }
+.btn.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.15); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+.btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: auto; }
+.btn-row .btn { flex: 1; min-width: 140px; }
+
+/* Table Styles */
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+td { color: var(--text-main); }
+tr:hover td { background: var(--bg-tertiary); }
+.node-status-ready { color: var(--success); }
+.node-status-offline { color: var(--error); }
+.node-status-querying { color: var(--warning); }
+
+/* Radio button styling */
+.radio-group { display: flex; flex-direction: column; gap: 12px; }
+.radio-option { display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); }
+.radio-option:hover { border-color: var(--accent); }
+.radio-option input[type="radio"] { accent-color: var(--accent); width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+.radio-option.selected { border-color: var(--accent); background: var(--accent-glow); }
+.radio-label { font-weight: 600; color: var(--text-main); display: block; margin-bottom: 4px; }
+.radio-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+/* Terminal Output */
+.terminal-output { flex: 1; background: #000; border: 1px solid var(--border); padding: 16px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); overflow-y: auto; overflow-x: hidden; border-radius: 8px; line-height: 1.6; min-height: 200px; box-shadow: inset 0 2px 15px rgba(0,0,0,0.5); word-wrap: break-word; white-space: pre-wrap; }
+.terminal-output span.highlight { color: var(--accent); font-weight: bold; text-shadow: 0 0 8px var(--accent-glow); }
+.terminal-output span.sys-err { color: var(--error); }
+.terminal-output span.sys-warn { color: var(--warning); }
+.terminal-output span.sys-ok { color: var(--accent); }
+.terminal-output span.sys-info { color: var(--text-muted); }
+
+/* Dropzone */
+.dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px 24px; text-align: center; color: var(--text-muted); cursor: pointer; transition: all var(--transition-fast); background: var(--bg-primary); position: relative; overflow: hidden; }
+.dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); }
+
+/* Stats Grid */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px; margin-top: 24px; background: var(--bg-primary); padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
+.stat-item { display: flex; flex-direction: column; font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-item span { font-size: 18px; font-weight: 700; color: var(--text-main); font-family: var(--font-mono); margin-top: 6px; letter-spacing: -0.5px; text-transform: none; }
+
+/* Progress bar */
+.progress-container { width: 100%; height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; margin-top: 12px; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); width: 0%; transition: width 0.3s ease-out; }
+
+/* Coherence score display */
+.coherence-display { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; margin-top: 16px; }
+.coherence-label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.coherence-value { font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--accent); }
+.coherence-bar { flex: 1; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; }
+.coherence-bar-fill { height: 100%; background: linear-gradient(90deg, var(--error), var(--warning), var(--success)); width: 0%; transition: width 0.5s ease-out; }
+
+/* Contribution display */
+.contribution-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.contribution-tag { padding: 6px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 16px; font-size: 11px; font-family: var(--font-mono); }
+.contribution-tag .node-name { color: var(--accent); font-weight: 600; }
+.contribution-tag .contrib-pct { color: var(--text-muted); }
+
+footer { display: flex; gap: 24px; align-items: center; padding: 12px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); overflow-x: auto; white-space: nowrap; flex-shrink: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); z-index: 20; }
+.footer-stat { color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.footer-stat span { color: var(--accent); font-weight: 700; }
+
+@media (max-width: 768px) {
+  .screen { padding: 16px; gap: 16px; }
+  .panel { padding: 16px; }
+  .btn-row { flex-direction: column; }
+  .btn-row .btn { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- CSS State Routing Vectors -->
+<input type="radio" name="route" id="route-swarm" checked>
+<input type="radio" name="route" id="route-vocab">
+<input type="radio" name="route" id="route-generate">
+<input type="radio" name="route" id="route-log">
+
+<div id="app-container">
+  <header>
+    <h1>JUNTO</h1>
+    <span class="subtitle">Swarm Language Orchestrator</span>
+    <div class="status-pill">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="node-count">0 nodes active</span>
+    </div>
+  </header>
+
+  <nav>
+    <label class="nav-tab" for="route-swarm">1. SWARM</label>
+    <label class="nav-tab" for="route-vocab">2. VOCABULARY</label>
+    <label class="nav-tab" for="route-generate">3. GENERATE</label>
+    <label class="nav-tab" for="route-log">4. LOG</label>
+  </nav>
+
+  <!-- 1. SWARM -->
+  <div class="screen" id="screen-swarm">
+    <div class="panel" style="max-width: 1200px; margin: 0 auto; width: 100%;">
+      <div class="panel-header">
+        NODE REGISTRY
+        <div class="btn-row" style="margin: 0;">
+          <button class="btn" onclick="Orchestrator.pingAll()">PING ALL</button>
+          <button class="btn primary" onclick="Orchestrator.syncVocabToAll()" id="btn-sync-vocab" disabled>SYNC VOCAB TO ALL</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <table id="node-table">
+          <thead>
+            <tr>
+              <th>Node ID</th>
+              <th>Corpus Label</th>
+              <th>Status</th>
+              <th>Vocab Sync</th>
+              <th>Validator</th>
+            </tr>
+          </thead>
+          <tbody id="node-table-body">
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 48px;">No nodes registered. Open HTMLNLM-junto-node.html instances to join the swarm.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. VOCABULARY -->
+  <div class="screen" id="screen-vocab">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:24px; max-width: 1200px; margin: 0 auto; width: 100%;">
+      <div class="panel">
+        <div class="panel-header">MASTER CORPUS INPUT</div>
+        <div class="dropzone" id="vocab-dropzone" onclick="document.getElementById('vocab-file-upload').click()" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');" ondrop="event.preventDefault(); this.classList.remove('dragover'); handleVocabFileDrop(event);">
+          <svg style="width:36px;height:36px;margin-bottom:12px;opacity:0.8;color:var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg><br>
+          <span style="font-size:14px; font-weight:700; color:var(--text-main);">Drop .txt or .md corpus here</span><br>
+          <span style="font-size:12px; opacity:0.6; margin-top:8px; display:inline-block;">Or click to browse</span>
+        </div>
+        <input type="file" id="vocab-file-upload" accept=".txt,.md" style="display:none" onchange="handleVocabFileInput(this)">
+        
+        <div class="control-group" style="margin-top:24px;">
+          <textarea id="vocab-corpus-input" placeholder="Or paste master corpus text directly..." oninput="handleVocabTextInput(this.value)"></textarea>
+        </div>
+        
+        <div class="control-group">
+          <label><span>Vocabulary Size</span> <input type="number" class="val-input" id="val-vocab-size" min="256" max="8192" step="256" value="2048" onchange="document.getElementById('cfg-vocab-size').value=this.value"></label>
+          <input type="range" id="cfg-vocab-size" min="256" max="8192" step="256" value="2048" oninput="document.getElementById('val-vocab-size').value=this.value">
+        </div>
+        
+        <div class="btn-row">
+          <button class="btn primary" id="btn-compile-bpe" onclick="Orchestrator.compileBPE()">COMPILE BPE</button>
+        </div>
+        
+        <div class="progress-container" id="bpe-progress-container" style="display:none;">
+          <div class="progress-fill" id="bpe-progress-fill"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">COMPILED VOCAB STATS</div>
+        <div class="stat-grid">
+          <div class="stat-item">Vocab Size <span id="stat-vocab-size">–</span></div>
+          <div class="stat-item">Merge Count <span id="stat-merge-count">–</span></div>
+          <div class="stat-item">Corpus Tokens <span id="stat-corpus-tokens">–</span></div>
+        </div>
+        
+        <div class="btn-row" style="margin-top: 24px;">
+          <button class="btn" onclick="Orchestrator.saveVocab()" id="btn-save-vocab" disabled>SAVE VOCAB (.json)</button>
+          <button class="btn primary" onclick="document.getElementById('load-vocab-file').click()">LOAD EXISTING</button>
+          <input type="file" id="load-vocab-file" accept=".json" style="display:none" onchange="Orchestrator.loadVocab(this)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. GENERATE -->
+  <div class="screen" id="screen-generate">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:24px; max-width: 1400px; margin: 0 auto; width: 100%;">
+      <div class="panel">
+        <div class="panel-header">GENERATION PARAMETERS</div>
+        
+        <div class="control-group">
+          <label>Prompt</label>
+          <textarea id="gen-prompt" placeholder="Enter your prompt here..." style="min-height: 100px;"></textarea>
+        </div>
+        
+        <div class="control-group">
+          <label><span>Merge Strategy</span></label>
+          <div class="radio-group">
+            <label class="radio-option selected" onclick="selectMergeStrategy(this, 'uniform')">
+              <input type="radio" name="merge-strategy" value="uniform" checked>
+              <div>
+                <span class="radio-label">Uniform Average</span>
+                <span class="radio-desc">Equal weight to all nodes. Simple democratic voting.</span>
+              </div>
+            </label>
+            <label class="radio-option" onclick="selectMergeStrategy(this, 'confidence')">
+              <input type="radio" name="merge-strategy" value="confidence">
+              <div>
+                <span class="radio-label">Confidence-Weighted</span>
+                <span class="radio-desc">Weight by inverse entropy. More confident nodes contribute more.</span>
+              </div>
+            </label>
+            <label class="radio-option" onclick="selectMergeStrategy(this, 'topk')">
+              <input type="radio" name="merge-strategy" value="topk">
+              <div>
+                <span class="radio-label">Top-K Vote</span>
+                <span class="radio-desc">Count votes for top-K tokens per node. Tie-break by confidence.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label><span>Temperature</span> <input type="number" class="val-input" id="val-temp" min="0.01" max="2.0" step="0.01" value="0.80" onchange="document.getElementById('cfg-temp').value=Math.round(this.value*100)"></label>
+          <input type="range" id="cfg-temp" min="1" max="200" value="80" oninput="document.getElementById('val-temp').value=(this.value/100).toFixed(2)">
+        </div>
+        
+        <div class="control-group">
+          <label><span>Top-P Nucleus</span> <input type="number" class="val-input" id="val-topp" min="0.01" max="1.0" step="0.01" value="0.90" onchange="document.getElementById('cfg-topp').value=Math.round(this.value*100)"></label>
+          <input type="range" id="cfg-topp" min="1" max="100" value="90" oninput="document.getElementById('val-topp').value=(this.value/100).toFixed(2)">
+        </div>
+        
+        <div class="control-group">
+          <label><span>Max Tokens</span> <input type="number" class="val-input" id="val-maxtokens" min="10" max="512" step="10" value="100" onchange="document.getElementById('cfg-maxtokens').value=this.value"></label>
+          <input type="range" id="cfg-maxtokens" min="10" max="512" step="10" value="100" oninput="document.getElementById('val-maxtokens').value=this.value">
+        </div>
+        
+        <div class="btn-row">
+          <button class="btn primary" id="btn-generate" onclick="Orchestrator.generate()">GENERATE</button>
+        </div>
+      </div>
+
+      <div class="panel" style="display:flex; flex-direction:column;">
+        <div class="panel-header">OUTPUT</div>
+        <div id="gen-output" class="terminal-output" style="font-size:15px; color:var(--text-main);"></div>
+        
+        <div class="coherence-display" id="coherence-display" style="display:none;">
+          <span class="coherence-label">Coherence Score</span>
+          <div class="coherence-bar">
+            <div class="coherence-bar-fill" id="coherence-bar-fill"></div>
+          </div>
+          <span class="coherence-value" id="coherence-value">0.00</span>
+        </div>
+        
+        <div id="contribution-display" style="margin-top: 16px; display:none;">
+          <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Per-Node Contribution</div>
+          <div class="contribution-list" id="contribution-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. LOG -->
+  <div class="screen" id="screen-log">
+    <div class="panel" style="max-width: 1200px; margin: 0 auto; width: 100%; height: 100%;">
+      <div class="panel-header">
+        SYSTEM EVENT LOG
+        <button class="btn" style="padding:6px 14px; font-size:11px; min-width:auto; height:auto;" onclick="Orchestrator.clearLog()">CLEAR</button>
+      </div>
+      <div id="sys-log" class="terminal-output"></div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-stat">Channel: <span>junto-swarm</span></div>
+    <div class="footer-stat">Vocab: <span id="ft-vocab-status">Not compiled</span></div>
+    <div class="footer-stat">Last Ping: <span id="ft-last-ping">–</span></div>
+  </footer>
+</div>
+
+<script>
+/**
+ * Junto Orchestrator — ConsciousNode SoftWorks
+ * MIT License
+ *
+ * A local swarm of small language models coordinating toward
+ * a better answer than any individual could produce.
+ *
+ * Named for Franklin's Junto Club (1727):
+ * a small group of specialists, reasoning together.
+ *
+ * Architecture: BroadcastChannel mesh, shared BPE vocabulary,
+ * ensemble logit merging, optional coherence validation.
+ * Each node is a sovereign HTMLNLM instance.
+ * The swarm emerges from the protocol.
+ */
+
+/* ╔══════════════════════════╗
+   ║        CONFIG            ║
+   ╚══════════════════════════╝ */
+const CONFIG = {
+  channelName: 'junto-swarm',
+  pingInterval: 5000,
+  queryTimeout: 10000,
+  maxMissedPings: 3,
+  topK: 10
+};
+
+/* ╔══════════════════════════╗
+   ║     BPE COMPILER         ║
+   ╚══════════════════════════╝ */
+class BPECompiler {
+  constructor() {
+    this.vocab = null;
+    this.merges = null;
+    this.size = 0;
+    this.compiled = false;
+  }
+
+  async compile(text, targetVocabSize, onProgress) {
+    const CAP = 8000000; // 8MB cap
+    const truncated = text.length > CAP;
+    const bytes = new TextEncoder().encode(truncated ? text.substring(0, CAP) : text);
+    
+    let tokens = new Uint32Array(bytes.length);
+    for(let i=0; i<bytes.length; i++) tokens[i] = bytes[i];
+    
+    const vocab = {};
+    const merges = [];
+    for(let i=0; i<256; i++) vocab[i] = String.fromCharCode(i);
+    let nextId = 256;
+
+    const totalMerges = targetVocabSize - 256;
+    
+    for(let m = 0; m < totalMerges; m++) {
+      if (tokens.length < 2) break;
+      
+      const freq = new Map();
+      for(let i=0; i<tokens.length-1; i++) {
+        const key = tokens[i] * 65536 + tokens[i+1];
+        freq.set(key, (freq.get(key) || 0) + 1);
+      }
+      
+      let bestKey = -1, maxCount = 0;
+      for(const [k, c] of freq) { if(c > maxCount) { maxCount = c; bestKey = k; } }
+      if (maxCount < 2) break;
+      
+      const left = Math.floor(bestKey / 65536), right = bestKey % 65536;
+      const newId = nextId++;
+      vocab[newId] = (vocab[left] || '') + (vocab[right] || '');
+      merges.push([bestKey, newId]);
+      
+      const nt = new Uint32Array(tokens.length);
+      let j=0, i=0;
+      while(i < tokens.length) {
+        if(i < tokens.length-1 && tokens[i] === left && tokens[i+1] === right) {
+          nt[j++] = newId; i += 2;
+        } else {
+          nt[j++] = tokens[i++];
+        }
+      }
+      tokens = nt.slice(0, j);
+      
+      if(m % 50 === 0) {
+        onProgress && onProgress(m / totalMerges);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+    
+    this.vocab = vocab;
+    this.merges = merges;
+    this.size = nextId;
+    this.compiled = true;
+    
+    return { vocab, merges, size: nextId, corpusTokens: tokens.length };
+  }
+
+  encode(text) {
+    if(!this.compiled) return [];
+    let tokens = Array.from(new TextEncoder().encode(text));
+    for (const [key, newId] of this.merges) {
+      const left = Math.floor(key / 65536), right = key % 65536;
+      const res = [];
+      let i = 0;
+      while(i < tokens.length) {
+        if(i < tokens.length - 1 && tokens[i] === left && tokens[i+1] === right) {
+          res.push(newId); i += 2;
+        } else { res.push(tokens[i++]); }
+      }
+      tokens = res;
+    }
+    return tokens;
+  }
+
+  decode(ids) {
+    if(!this.compiled) return '';
+    return ids.map(id => this.vocab[id] || '').join('');
+  }
+}
+
+/* ╔══════════════════════════╗
+   ║   BROADCAST PROTOCOL     ║
+   ╚══════════════════════════╝ */
+class BroadcastProtocol {
+  constructor(channelName, handlers) {
+    this.channel = new BroadcastChannel(channelName);
+    this.channel.onmessage = (e) => this.handleMessage(e.data);
+    this.handlers = handlers;
+    this.messageLog = [];
+  }
+
+  handleMessage(data) {
+    this.logMessage('IN', data);
+    const handler = this.handlers[data.type];
+    if(handler) handler(data);
+  }
+
+  broadcast(msg) {
+    this.logMessage('OUT', msg);
+    this.channel.postMessage(msg);
+  }
+
+  logMessage(direction, msg) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      direction,
+      type: msg.type,
+      data: msg
+    };
+    this.messageLog.push(entry);
+    if(this.messageLog.length > 1000) this.messageLog.shift();
+    
+    // Also log to UI
+    Orchestrator.log(`${direction} [${msg.type}] ${JSON.stringify(msg).substring(0, 100)}...`);
+  }
+
+  getLog() {
+    return this.messageLog;
+  }
+
+  clearLog() {
+    this.messageLog = [];
+  }
+}
+
+/* ╔══════════════════════════╗
+   ║     NODE REGISTRY        ║
+   ╚══════════════════════════╝ */
+class NodeRegistry {
+  constructor() {
+    this.nodes = new Map(); // nodeId -> nodeInfo
+    this.validatorId = null;
+    this.missedPings = new Map();
+  }
+
+  register(nodeId, corpusLabel) {
+    this.nodes.set(nodeId, {
+      nodeId,
+      corpusLabel,
+      status: 'ready',
+      vocabAcked: false,
+      lastSeen: Date.now()
+    });
+    this.missedPings.set(nodeId, 0);
+    Orchestrator.log(`Node registered: ${nodeId} (${corpusLabel})`, 'ok');
+    this.updateUI();
+  }
+
+  ackVocab(nodeId) {
+    const node = this.nodes.get(nodeId);
+    if(node) {
+      node.vocabAcked = true;
+      node.lastSeen = Date.now();
+      Orchestrator.log(`Vocab ack from: ${nodeId}`, 'ok');
+      this.updateUI();
+    }
+  }
+
+  setValidator(nodeId) {
+    this.validatorId = nodeId;
+    Orchestrator.log(`Validator set: ${nodeId}`, 'ok');
+    this.updateUI();
+  }
+
+  markOffline(nodeId) {
+    const node = this.nodes.get(nodeId);
+    if(node) {
+      node.status = 'offline';
+      this.updateUI();
+    }
+  }
+
+  markQuerying(nodeId) {
+    const node = this.nodes.get(nodeId);
+    if(node && node.status !== 'offline') {
+      node.status = 'querying';
+      this.updateUI();
+    }
+  }
+
+  markReady(nodeId) {
+    const node = this.nodes.get(nodeId);
+    if(node && node.status !== 'offline') {
+      node.status = 'ready';
+      node.lastSeen = Date.now();
+      this.missedPings.set(nodeId, 0);
+      this.updateUI();
+    }
+  }
+
+  incrementMissedPings() {
+    for(const [nodeId, count] of this.missedPings) {
+      if(this.nodes.has(nodeId)) {
+        const newCount = count + 1;
+        this.missedPings.set(nodeId, newCount);
+        if(newCount >= CONFIG.maxMissedPings) {
+          this.markOffline(nodeId);
+        }
+      }
+    }
+  }
+
+  getActiveNodes() {
+    return Array.from(this.nodes.values()).filter(n => n.status !== 'offline');
+  }
+
+  getReadyNodes() {
+    return Array.from(this.nodes.values()).filter(n => n.status === 'ready' && n.vocabAcked);
+  }
+
+  hasValidator() {
+    return this.validatorId !== null && this.nodes.has(this.validatorId) && this.nodes.get(this.validatorId).status !== 'offline';
+  }
+
+  updateUI() {
+    const tbody = document.getElementById('node-table-body');
+    const nodeCount = document.getElementById('node-count');
+    const statusDot = document.getElementById('status-dot');
+    
+    const activeNodes = this.getActiveNodes();
+    nodeCount.textContent = `${activeNodes.length} node${activeNodes.length !== 1 ? 's' : ''} active`;
+    
+    if(activeNodes.length === 0) {
+      statusDot.classList.add('offline');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 48px;">No nodes registered. Open HTMLNLM-junto-node.html instances to join the swarm.</td>
+        </tr>
+      `;
+      return;
+    }
+    
+    statusDot.classList.remove('offline');
+    
+    tbody.innerHTML = Array.from(this.nodes.values()).map(node => `
+      <tr>
+        <td>${node.nodeId}</td>
+        <td>${node.corpusLabel}</td>
+        <td class="node-status-${node.status}">${node.status.toUpperCase()}</td>
+        <td>${node.vocabAcked ? '<span style="color:var(--success)">ACKED</span>' : '<span style="color:var(--warning)">PENDING</span>'}</td>
+        <td>
+          <input type="radio" name="validator" ${node.nodeId === this.validatorId ? 'checked' : ''} 
+                 onchange="Orchestrator.setValidator('${node.nodeId}')" 
+                 ${node.status === 'offline' ? 'disabled' : ''}>
+        </td>
+      </tr>
+    `).join('');
+  }
+}
+
+/* ╔══════════════════════════╗
+   ║      MERGE ENGINE        ║
+   ╚══════════════════════════╝ */
+class MergeEngine {
+  // Uniform Average: equal weight to all nodes
+  static uniformAverage(logitsArrays) {
+    if(logitsArrays.length === 0) return null;
+    const vocabSize = logitsArrays[0].length;
+    const merged = new Float32Array(vocabSize);
+    
+    for(let i = 0; i < vocabSize; i++) {
+      let sum = 0;
+      for(const logits of logitsArrays) {
+        sum += logits[i];
+      }
+      merged[i] = sum / logitsArrays.length;
+    }
+    return merged;
+  }
+
+  // Confidence-Weighted: weight by inverse entropy
+  static confidenceWeighted(logitsArrays) {
+    if(logitsArrays.length === 0) return null;
+    const vocabSize = logitsArrays[0].length;
+    
+    // Calculate entropy for each node's distribution
+    const weights = logitsArrays.map(logits => {
+      const probs = softmax(logits);
+      const entropy = -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log(p + 1e-10) : 0), 0);
+      return 1 / (entropy + 1e-8);
+    });
+    
+    // Normalize weights
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    const normalizedWeights = weights.map(w => w / totalWeight);
+    
+    // Weighted sum
+    const merged = new Float32Array(vocabSize);
+    for(let i = 0; i < vocabSize; i++) {
+      let sum = 0;
+      for(let j = 0; j < logitsArrays.length; j++) {
+        sum += logitsArrays[j][i] * normalizedWeights[j];
+      }
+      merged[i] = sum;
+    }
+    return merged;
+  }
+
+  // Top-K Vote: count votes for top-K tokens
+  static topKVote(logitsArrays, k = CONFIG.topK) {
+    if(logitsArrays.length === 0) return null;
+    const vocabSize = logitsArrays[0].length;
+    
+    // Count votes per token
+    const votes = new Float32Array(vocabSize).fill(0);
+    const topKIndicesPerNode = logitsArrays.map(logits => {
+      const indexed = logits.map((v, i) => ({v, i}));
+      indexed.sort((a, b) => b.v - a.v);
+      return indexed.slice(0, k).map(x => x.i);
+    });
+    
+    for(const topK of topKIndicesPerNode) {
+      for(const idx of topK) {
+        votes[idx]++;
+      }
+    }
+    
+    // For tokens with same vote count, fall back to confidence-weighted
+    const maxVotes = Math.max(...votes);
+    const tiedTokens = [];
+    for(let i = 0; i < vocabSize; i++) {
+      if(votes[i] === maxVotes) {
+        tiedTokens.push(i);
+      }
+    }
+    
+    if(tiedTokens.length > 1) {
+      // Use confidence-weighted among tied tokens
+      const confWeights = logitsArrays.map(logits => {
+        const probs = softmax(logits);
+        const entropy = -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log(p + 1e-10) : 0), 0);
+        return 1 / (entropy + 1e-8);
+      });
+      const totalConf = confWeights.reduce((a, b) => a + b, 0);
+      
+      for(const tokenIdx of tiedTokens) {
+        let weightedSum = 0;
+        for(let j = 0; j < logitsArrays.length; j++) {
+          weightedSum += logitsArrays[j][tokenIdx] * (confWeights[j] / totalConf);
+        }
+        votes[tokenIdx] += weightedSum * 0.01; // Small boost to break ties
+      }
+    }
+    
+    return votes;
+  }
+}
+
+function softmax(logits) {
+  const max = Math.max(...logits);
+  const exps = logits.map(x => Math.exp(x - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return exps.map(x => x / sum);
+}
+
+/* ╔══════════════════════════╗
+   ║      DECODE LOOP         ║
+   ╚══════════════════════════╝ */
+class DecodeLoop {
+  constructor(orchestrator) {
+    this.orchestrator = orchestrator;
+    this.isRunning = false;
+    this.contributions = new Map(); // nodeId -> contribution count
+  }
+
+  async decode(promptTokens, maxTokens, temperature, topP, strategy, onToken) {
+    this.isRunning = true;
+    this.contributions.clear();
+    
+    let currentTokens = [...promptTokens];
+    
+    for(let i = 0; i < maxTokens && this.isRunning; i++) {
+      // Fan out to all nodes
+      const queryId = 'q-' + Math.random().toString(36).slice(2, 7);
+      const readyNodes = this.orchestrator.registry.getReadyNodes();
+      
+      if(readyNodes.length === 0) {
+        this.orchestrator.log('No ready nodes available', 'error');
+        break;
+      }
+      
+      const pendingResponses = new Map();
+      
+      for(const node of readyNodes) {
+        this.orchestrator.registry.markQuerying(node.nodeId);
+        this.orchestrator.protocol.broadcast({
+          type: 'query',
+          targetNodeId: node.nodeId,
+          queryId,
+          promptTokens: currentTokens
+        });
+        pendingResponses.set(node.nodeId, true);
+      }
+      
+      // Collect responses
+      const responses = await this.collectResponses(queryId, readyNodes.map(n => n.nodeId));
+      
+      if(responses.length === 0) {
+        this.orchestrator.log('No responses received', 'error');
+        break;
+      }
+      
+      // Track contributions
+      for(const resp of responses) {
+        const current = this.contributions.get(resp.nodeId) || 0;
+        this.contributions.set(resp.nodeId, current + 1);
+      }
+      
+      // Merge logits
+      const logitsArrays = responses.map(r => new Float32Array(r.logits));
+      let mergedLogits;
+      
+      switch(strategy) {
+        case 'confidence':
+          mergedLogits = MergeEngine.confidenceWeighted(logitsArrays);
+          break;
+        case 'topk':
+          mergedLogits = MergeEngine.topKVote(logitsArrays);
+          break;
+        case 'uniform':
+        default:
+          mergedLogits = MergeEngine.uniformAverage(logitsArrays);
+      }
+      
+      // Sample next token
+      const nextToken = this.sampleLogits(mergedLogits, temperature, topP);
+      currentTokens.push(nextToken);
+      
+      // Notify callback
+      onToken && onToken(nextToken);
+      
+      // Mark nodes ready again
+      for(const node of readyNodes) {
+        this.orchestrator.registry.markReady(node.nodeId);
+      }
+      
+      // Yield to main thread
+      await new Promise(r => setTimeout(r, 0));
+    }
+    
+    this.isRunning = false;
+    return currentTokens.slice(promptTokens.length);
+  }
+
+  async collectResponses(queryId, expectedNodeIds) {
+    const responses = [];
+    const startTime = Date.now();
+    const pending = new Set(expectedNodeIds);
+    
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        // Check protocol log for responses
+        const log = this.orchestrator.protocol.getLog();
+        for(const entry of log.slice(-50)) {
+          if(entry.direction === 'IN' && entry.data.type === 'logits' && entry.data.queryId === queryId) {
+            if(pending.has(entry.data.nodeId)) {
+              responses.push(entry.data);
+              pending.delete(entry.data.nodeId);
+            }
+          }
+        }
+        
+        // Check timeout or all received
+        const elapsed = Date.now() - startTime;
+        if(pending.size === 0 || elapsed > CONFIG.queryTimeout) {
+          clearInterval(checkInterval);
+          resolve(responses);
+        }
+      }, 50);
+    });
+  }
+
+  sampleLogits(logits, temp, topP) {
+    if (temp <= 0.01) {
+      let max = -Infinity, best = 0;
+      for(let i=0; i<logits.length; i++) { if(logits[i]>max){ max=logits[i]; best=i; } }
+      return best;
+    }
+    
+    const scaled = new Float32Array(logits.length);
+    let max = -Infinity;
+    for(let i=0; i<logits.length; i++) {
+      scaled[i] = logits[i] / temp;
+      if(scaled[i] > max) max = scaled[i];
+    }
+    
+    const probs = new Float32Array(logits.length);
+    let sum = 0;
+    for(let i=0; i<logits.length; i++) {
+      probs[i] = Math.exp(scaled[i] - max);
+      sum += probs[i];
+    }
+    for(let i=0; i<logits.length; i++) probs[i] /= sum;
+
+    if (topP < 1.0) {
+      const sorted = Array.from(probs).map((p, i) => ({p, i})).sort((a,b) => b.p - a.p);
+      let cum = 0, newSum = 0;
+      const filtered = new Float32Array(logits.length);
+      for(let item of sorted) {
+        filtered[item.i] = item.p;
+        newSum += item.p;
+        cum += item.p;
+        if(cum > topP) break;
+      }
+      for(let i=0; i<logits.length; i++) probs[i] = filtered[i] / (newSum || 1);
+    }
+
+    const r = Math.random();
+    let acc = 0;
+    for(let i=0; i<logits.length; i++) {
+      if(probs[i] > 0) {
+        acc += probs[i];
+        if(r <= acc) return i;
+      }
+    }
+    return 0;
+  }
+
+  stop() {
+    this.isRunning = false;
+  }
+
+  getContributions() {
+    const total = Array.from(this.contributions.values()).reduce((a, b) => a + b, 0);
+    if(total === 0) return [];
+    return Array.from(this.contributions.entries()).map(([nodeId, count]) => ({
+      nodeId,
+      percentage: (count / total * 100).toFixed(1)
+    })).sort((a, b) => b.percentage - a.percentage);
+  }
+}
+
+/* ╔══════════════════════════╗
+   ║   COHERENCE VALIDATOR    ║
+   ╚══════════════════════════╝ */
+class CoherenceValidator {
+  constructor(orchestrator) {
+    this.orchestrator = orchestrator;
+  }
+
+  async validate(promptTokens, outputTokens) {
+    const validatorId = this.orchestrator.registry.validatorId;
+    if(!validatorId) return null;
+    
+    const queryId = 'val-' + Math.random().toString(36).slice(2, 7);
+    
+    // Get prompt logits from validator
+    this.orchestrator.protocol.broadcast({
+      type: 'query',
+      targetNodeId: validatorId,
+      queryId: queryId + '-prompt',
+      promptTokens
+    });
+    
+    // Get output logits from validator
+    this.orchestrator.protocol.broadcast({
+      type: 'query',
+      targetNodeId: validatorId,
+      queryId: queryId + '-output',
+      promptTokens: [...promptTokens, ...outputTokens]
+    });
+    
+    // Collect responses
+    const promptResp = await this.waitForResponse(queryId + '-prompt', validatorId);
+    const outputResp = await this.waitForResponse(queryId + '-output', validatorId);
+    
+    if(!promptResp || !outputResp) return null;
+    
+    // Calculate cosine similarity between prompt and output distributions
+    const promptLogits = new Float32Array(promptResp.logits);
+    const outputLogits = new Float32Array(outputResp.logits);
+    
+    const promptProbs = softmax(Array.from(promptLogits));
+    const outputProbs = softmax(Array.from(outputLogits));
+    
+    return this.cosineSimilarity(promptProbs, outputProbs);
+  }
+
+  async waitForResponse(queryId, nodeId) {
+    const startTime = Date.now();
+    
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        const log = this.orchestrator.protocol.getLog();
+        for(const entry of log.slice(-50)) {
+          if(entry.direction === 'IN' && entry.data.type === 'logits' && 
+             entry.data.queryId === queryId && entry.data.nodeId === nodeId) {
+            clearInterval(checkInterval);
+            resolve(entry.data);
+            return;
+          }
+        }
+        
+        if(Date.now() - startTime > CONFIG.queryTimeout) {
+          clearInterval(checkInterval);
+          resolve(null);
+        }
+      }, 50);
+    });
+  }
+
+  cosineSimilarity(a, b) {
+    let dot = 0, normA = 0, normB = 0;
+    for(let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
+  }
+}
+
+/* ╔══════════════════════════╗
+   ║    APP CONTROLLER        ║
+   ╚══════════════════════════╝ */
+const Orchestrator = {
+  protocol: null,
+  registry: null,
+  bpeCompiler: null,
+  decodeLoop: null,
+  validator: null,
+  vocabCorpus: '',
+  isGenerating: false,
+
+  init() {
+    this.registry = new NodeRegistry();
+    this.bpeCompiler = new BPECompiler();
+    this.decodeLoop = new DecodeLoop(this);
+    this.validator = new CoherenceValidator(this);
+    
+    this.protocol = new BroadcastProtocol(CONFIG.channelName, {
+      'node-ready': (data) => {
+        this.registry.register(data.nodeId, data.corpusLabel);
+      },
+      'vocab-ack': (data) => {
+        this.registry.ackVocab(data.nodeId);
+      },
+      'logits': (data) => {
+        // Handled in decode loop
+      },
+      'query-error': (data) => {
+        this.log(`Query error from ${data.nodeId}: ${data.reason}`, 'error');
+      }
+    });
+    
+    // Start ping interval
+    setInterval(() => this.pingAll(), CONFIG.pingInterval);
+    
+    this.log('Junto Orchestrator initialized', 'ok');
+    this.updateVocabStatus();
+  },
+
+  log(msg, type = 'info') {
+    const el = document.getElementById('sys-log');
+    const cssClass = type === 'error' ? 'sys-err' : type === 'warn' ? 'sys-warn' : type === 'ok' ? 'sys-ok' : 'sys-info';
+    const tag = type.toUpperCase().padStart(5, ' ');
+    const timestamp = new Date().toISOString().substring(11, 19);
+    el.innerHTML += `<div><span style="opacity:0.6">[${timestamp}]</span> <span class="${cssClass}">[${tag}] ${msg}</span></div>`;
+    el.scrollTop = el.scrollHeight;
+  },
+
+  clearLog() {
+    document.getElementById('sys-log').innerHTML = '';
+    this.protocol.clearLog();
+  },
+
+  pingAll() {
+    this.protocol.broadcast({ type: 'ping' });
+    this.registry.incrementMissedPings();
+    document.getElementById('ft-last-ping').textContent = new Date().toLocaleTimeString();
+    this.log('Ping sent to all nodes');
+  },
+
+  setValidator(nodeId) {
+    this.registry.setValidator(nodeId);
+  },
+
+  async compileBPE() {
+    if(!this.vocabCorpus || this.vocabCorpus.length < 100) {
+      this.log('Corpus too small. Minimum 100 characters required.', 'error');
+      return;
+    }
+    
+    const targetSize = parseInt(document.getElementById('cfg-vocab-size').value);
+    const progressContainer = document.getElementById('bpe-progress-container');
+    const progressFill = document.getElementById('bpe-progress-fill');
+    const compileBtn = document.getElementById('btn-compile-bpe');
+    
+    progressContainer.style.display = 'block';
+    compileBtn.disabled = true;
+    
+    this.log(`Starting BPE compilation (target: ${targetSize})...`);
+    
+    try {
+      const result = await this.bpeCompiler.compile(this.vocabCorpus, targetSize, (pct) => {
+        progressFill.style.width = (pct * 100) + '%';
+      });
+      
+      progressFill.style.width = '100%';
+      
+      document.getElementById('stat-vocab-size').textContent = result.size;
+      document.getElementById('stat-merge-count').textContent = result.merges.length;
+      document.getElementById('stat-corpus-tokens').textContent = result.corpusTokens.toLocaleString();
+      
+      document.getElementById('btn-save-vocab').disabled = false;
+      document.getElementById('btn-sync-vocab').disabled = false;
+      
+      this.log(`BPE compiled: ${result.size} tokens, ${result.merges.length} merges`, 'ok');
+      this.updateVocabStatus();
+    } catch(e) {
+      this.log('BPE compilation failed: ' + e.message, 'error');
+    } finally {
+      compileBtn.disabled = false;
+    }
+  },
+
+  syncVocabToAll() {
+    if(!this.bpeCompiler.compiled) {
+      this.log('No compiled vocab to sync', 'error');
+      return;
+    }
+    
+    this.protocol.broadcast({
+      type: 'vocab-sync',
+      vocab: this.bpeCompiler.vocab,
+      merges: this.bpeCompiler.merges,
+      size: this.bpeCompiler.size
+    });
+    
+    this.log('Vocab sync broadcast to all nodes', 'ok');
+  },
+
+  saveVocab() {
+    if(!this.bpeCompiler.compiled) return;
+    
+    const data = {
+      vocab: this.bpeCompiler.vocab,
+      merges: this.bpeCompiler.merges,
+      size: this.bpeCompiler.size
+    };
+    
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `junto_vocab_${this.bpeCompiler.size}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    this.log('Vocab saved to file', 'ok');
+  },
+
+  loadVocab(input) {
+    const file = input.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        this.bpeCompiler.vocab = data.vocab;
+        this.bpeCompiler.merges = data.merges;
+        this.bpeCompiler.size = data.size;
+        this.bpeCompiler.compiled = true;
+        
+        document.getElementById('stat-vocab-size').textContent = data.size;
+        document.getElementById('stat-merge-count').textContent = data.merges.length;
+        document.getElementById('btn-save-vocab').disabled = false;
+        document.getElementById('btn-sync-vocab').disabled = false;
+        
+        this.log('Vocab loaded from file', 'ok');
+        this.updateVocabStatus();
+      } catch(err) {
+        this.log('Failed to load vocab: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+  },
+
+  updateVocabStatus() {
+    const status = this.bpeCompiler.compiled ? `Compiled (${this.bpeCompiler.size})` : 'Not compiled';
+    document.getElementById('ft-vocab-status').textContent = status;
+  },
+
+  async generate() {
+    if(this.isGenerating) {
+      this.decodeLoop.stop();
+      this.isGenerating = false;
+      document.getElementById('btn-generate').textContent = 'GENERATE';
+      return;
+    }
+    
+    if(!this.bpeCompiler.compiled) {
+      this.log('Compile or load vocab first', 'error');
+      return;
+    }
+    
+    const readyNodes = this.registry.getReadyNodes();
+    if(readyNodes.length === 0) {
+      this.log('No ready nodes available', 'error');
+      return;
+    }
+    
+    const prompt = document.getElementById('gen-prompt').value;
+    if(!prompt) {
+      this.log('Enter a prompt', 'error');
+      return;
+    }
+    
+    const promptTokens = this.bpeCompiler.encode(prompt);
+    const maxTokens = parseInt(document.getElementById('cfg-maxtokens').value);
+    const temperature = parseFloat(document.getElementById('val-temp').value);
+    const topP = parseFloat(document.getElementById('val-topp').value);
+    const strategy = document.querySelector('input[name="merge-strategy"]:checked').value;
+    
+    this.isGenerating = true;
+    document.getElementById('btn-generate').textContent = 'STOP';
+    
+    const outputEl = document.getElementById('gen-output');
+    outputEl.innerHTML = `<span style="opacity:0.5">${prompt}</span>`;
+    let generated = '';
+    
+    // Hide previous results
+    document.getElementById('coherence-display').style.display = 'none';
+    document.getElementById('contribution-display').style.display = 'none';
+    
+    this.log(`Generating with ${readyNodes.length} nodes, strategy: ${strategy}`);
+    
+    try {
+      const outputTokens = await this.decodeLoop.decode(
+        promptTokens,
+        maxTokens,
+        temperature,
+        topP,
+        strategy,
+        (token) => {
+          const char = this.bpeCompiler.decode([token]);
+          generated += char;
+          outputEl.innerHTML = `<span style="opacity:0.5">${prompt}</span><span class="highlight">${generated}</span>`;
+          outputEl.scrollTop = outputEl.scrollHeight;
+        }
+      );
+      
+      // Calculate coherence if validator is set
+      if(this.registry.hasValidator()) {
+        this.log('Calculating coherence score...');
+        const coherence = await this.validator.validate(promptTokens, outputTokens);
+        if(coherence !== null) {
+          document.getElementById('coherence-display').style.display = 'flex';
+          document.getElementById('coherence-value').textContent = coherence.toFixed(2);
+          document.getElementById('coherence-bar-fill').style.width = (coherence * 100) + '%';
+          this.log(`Coherence score: ${coherence.toFixed(3)}`, 'ok');
+        }
+      }
+      
+      // Show contributions
+      const contributions = this.decodeLoop.getContributions();
+      if(contributions.length > 0) {
+        const contribList = document.getElementById('contribution-list');
+        contribList.innerHTML = contributions.map(c => `
+          <span class="contribution-tag">
+            <span class="node-name">${c.nodeId}</span>
+            <span class="contrib-pct">${c.percentage}%</span>
+          </span>
+        `).join('');
+        document.getElementById('contribution-display').style.display = 'block';
+      }
+      
+      this.log('Generation complete', 'ok');
+    } catch(e) {
+      this.log('Generation error: ' + e.message, 'error');
+    } finally {
+      this.isGenerating = false;
+      document.getElementById('btn-generate').textContent = 'GENERATE';
+    }
+  }
+};
+
+/* ╔══════════════════════════╗
+   ║        UI INIT           ║
+   ╚══════════════════════════╝ */
+function handleVocabTextInput(txt) {
+  Orchestrator.vocabCorpus = txt;
+}
+
+function handleVocabFileInput(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    Orchestrator.vocabCorpus = e.target.result;
+    document.getElementById('vocab-corpus-input').value = Orchestrator.vocabCorpus.substring(0, 500) + '...';
+    Orchestrator.log('Corpus file loaded: ' + file.name, 'ok');
+  };
+  reader.readAsText(file);
+}
+
+function handleVocabFileDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if(file && (file.name.endsWith('.txt') || file.name.endsWith('.md'))) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      Orchestrator.vocabCorpus = e.target.result;
+      document.getElementById('vocab-corpus-input').value = Orchestrator.vocabCorpus.substring(0, 500) + '...';
+      Orchestrator.log('Corpus file dropped: ' + file.name, 'ok');
+    };
+    reader.readAsText(file);
+  } else {
+    Orchestrator.log('Invalid file type. Drop .txt or .md', 'error');
+  }
+}
+
+function selectMergeStrategy(el, value) {
+  document.querySelectorAll('.radio-option').forEach(opt => opt.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input[type="radio"]').checked = true;
+}
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded', () => {
+  Orchestrator.init();
+});
+</script>
+</body>
+</html>

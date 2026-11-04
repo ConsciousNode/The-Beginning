@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>VocalMesh · 2D Waveguide Articulatory Synthesizer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: #0b0e14;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', monospace;
+            margin: 0;
+            padding: 20px;
+            color: #eef2ff;
+        }
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .main-panel {
+            flex: 3;
+            min-width: 280px;
+            background: #11161f;
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+            border: 1px solid #2a2f3a;
+        }
+        .side-panel {
+            flex: 1.2;
+            min-width: 260px;
+            background: #11161f;
+            border-radius: 28px;
+            padding: 20px;
+            border: 1px solid #2a2f3a;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        textarea {
+            width: 100%;
+            height: 220px;
+            background: #0c0f16;
+            border: 1px solid #2e3440;
+            border-radius: 20px;
+            padding: 16px;
+            color: #e2e8f0;
+            font-size: 1rem;
+            line-height: 1.5;
+            font-family: monospace;
+            resize: vertical;
+            outline: none;
+        }
+        textarea:focus {
+            border-color: #3b82f6;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 16px 0 12px;
+        }
+        button {
+            background: #1e293b;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.1s linear;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #334155;
+        }
+        button.primary {
+            background: #2563eb;
+            border-color: #3b82f6;
+            box-shadow: 0 2px 6px rgba(37,99,235,0.3);
+        }
+        button.danger {
+            background: #991b1b;
+            border-color: #dc2626;
+        }
+        button.secondary {
+            background: #0f172a;
+        }
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        input[type="range"] {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            background: #2d3a4e;
+            border-radius: 10px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            width: 14px;
+            height: 14px;
+            background: #60a5fa;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .visualizer {
+            background: #05070c;
+            border-radius: 20px;
+            height: 140px;
+            width: 100%;
+            border: 1px solid #2d3748;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 18px;
+        }
+        .debug-card {
+            background: #0a0e14;
+            border-radius: 20px;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: #a5f3c3;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 12px;
+        }
+        .progress {
+            height: 5px;
+            background: #2d3748;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.05s linear;
+        }
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        select {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 40px;
+            padding: 6px 12px;
+            color: white;
+        }
+        h3 {
+            font-size: 0.9rem;
+            margin: 0 0 8px 0;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+        .badge {
+            background: #2563eb20;
+            border-radius: 30px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="main-panel">
+        <div class="flex-between">
+            <div><span style="font-weight:800; font-size:1.6rem;">🎤 VOCALMESH</span><span class="badge">2D DWM · articulatory</span></div>
+            <div><select id="langSelect"><option value="auto">🌐 AUTO DETECT</option><option value="en">🇬🇧 English</option><option value="es">🇪🇸 Spanish</option><option value="fr">🇫🇷 French</option><option value="de">🇩🇪 German</option><option value="it">🇮🇹 Italian</option><option value="ja">🇯🇵 Japanese</option><option value="ko">🇰🇷 Korean</option><option value="ru">🇷🇺 Russian</option><option value="el">🇬🇷 Greek</option></select></div>
+        </div>
+        <textarea id="inputText" placeholder="Enter text to speak... The 2D waveguide mesh simulates airflow through a variable vocal tract. Try questions? Or 'HAL, open the pod bay doors.'">Hello world. This is a full 2D digital waveguide mesh articulatory synthesizer. Each phoneme changes tract constriction, lip rounding, and velum opening.</textarea>
+        <div class="toolbar">
+            <button id="playBtn" class="primary">▶ PLAY</button>
+            <button id="stopBtn" class="danger">⏹ STOP</button>
+            <button id="readSelBtn">📌 READ SELECTION</button>
+            <button id="exportBtn">💾 EXPORT WAV</button>
+            <label for="fileInput" style="background:#1e293b; border-radius:40px; padding:8px 16px; cursor:pointer;">📂 LOAD FILE</label>
+            <input type="file" id="fileInput" accept=".txt,.html,.srt" style="display:none">
+        </div>
+        <div class="progress"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="status-bar"><span id="charCount">0 chars</span><span id="statusMsg">⚡ ready</span></div>
+        <canvas id="waveCanvas" class="visualizer"></canvas>
+    </div>
+
+    <div class="side-panel">
+        <div class="slider-group"><div class="flex-between"><span>🎵 PITCH (F0)</span><span id="pitchVal">110 Hz</span></div><div class="slider-row"><input type="range" id="pitchSlider" min="70" max="260" value="110" step="1"></div></div>
+        <div class="slider-group"><div class="flex-between"><span>⚡ RATE</span><span id="rateVal">1.0x</span></div><div class="slider-row"><input type="range" id="rateSlider" min="0.6" max="1.9" value="1.0" step="0.02"></div></div>
+        <div class="slider-group"><div class="flex-between"><span>👄 LIP ROUNDING OFFSET</span><span id="roundVal">0.0</span></div><div class="slider-row"><input type="range" id="roundSlider" min="0" max="1.0" value="0.2" step="0.01"></div></div>
+        <div class="slider-group"><div class="flex-between"><span>🌫️ ROUGHNESS (fry)</span><span id="roughVal">0.0</span></div><div class="slider-row"><input type="range" id="roughSlider" min="0" max="0.8" value="0.0" step="0.02"></div></div>
+        <div class="flex-between"><span>🔊 VOICE MODE</span><div><button id="maleModeBtn" class="secondary" style="padding:4px 12px;">MALE</button><button id="femaleModeBtn" class="secondary" style="padding:4px 12px;">FEMALE</button></div></div>
+        <div class="debug-card" id="phonemeDebug">📖 phoneme sequence will appear</div>
+        <div class="debug-card" id="meshMonitor">📍 constriction: 0% · velum: 0% · F1/F2: --/--</div>
+    </div>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // 1. PHONEME CONSTITUENTS (area function targets for DWM)
+    // each phoneme: {loc: 0-1 constriction center, degree:0-1 (0=neutral), lip:0-1, velum:0-1, noiseFlag, durationMs}
+    const PHONEME_MAP = {
+        'a':{loc:0.45, degree:0.42, lip:0.0, velum:0.0, noise:0, dur:95}, 'i':{loc:0.68, degree:0.2, lip:0.0, velum:0.0, noise:0, dur:90},
+        'u':{loc:0.55, degree:0.18, lip:0.85, velum:0.0, noise:0, dur:95}, 'e':{loc:0.62, degree:0.28, lip:0.1, velum:0.0, noise:0, dur:90},
+        'o':{loc:0.5, degree:0.24, lip:0.7, velum:0.0, noise:0, dur:95}, 'ə':{loc:0.5, degree:0.0, lip:0.0, velum:0.0, noise:0, dur:70},
+        'ɪ':{loc:0.64, degree:0.24, lip:0.0, velum:0.0, noise:0, dur:85}, 'ɛ':{loc:0.58, degree:0.32, lip:0.0, velum:0.0, noise:0, dur:90},
+        'æ':{loc:0.52, degree:0.48, lip:0.0, velum:0.0, noise:0, dur:95}, 'ɔ':{loc:0.44, degree:0.35, lip:0.55, velum:0.0, noise:0, dur:95},
+        'ʌ':{loc:0.42, degree:0.4, lip:0.0, velum:0.0, noise:0, dur:90}, 'ʊ':{loc:0.52, degree:0.2, lip:0.7, velum:0.0, noise:0, dur:85},
+        'm':{loc:0.92, degree:0.98, lip:0.0, velum:0.8, noise:0, dur:85}, 'n':{loc:0.85, degree:0.98, lip:0.0, velum:0.75, noise:0, dur:85},
+        'ŋ':{loc:0.48, degree:0.98, lip:0.0, velum:0.75, noise:0, dur:85}, 's':{loc:0.82, degree:0.86, lip:0.0, velum:0.0, noise:1, dur:110},
+        'z':{loc:0.82, degree:0.86, lip:0.0, velum:0.0, noise:1, dur:110}, 'ʃ':{loc:0.75, degree:0.88, lip:0.35, velum:0.0, noise:1, dur:110},
+        'f':{loc:0.94, degree:0.85, lip:0.0, velum:0.0, noise:1, dur:95}, 'v':{loc:0.94, degree:0.85, lip:0.0, velum:0.0, noise:1, dur:95},
+        'θ':{loc:0.88, degree:0.84, lip:0.0, velum:0.0, noise:1, dur:95}, 'ð':{loc:0.88, degree:0.84, lip:0.0, velum:0.0, noise:1, dur:95},
+        'p':{loc:0.96, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70}, 'b':{loc:0.96, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70},
+        't':{loc:0.86, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70}, 'd':{loc:0.86, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70},
+        'k':{loc:0.47, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70}, 'g':{loc:0.47, degree:1.0, lip:0.0, velum:0.0, noise:0, dur:70},
+        'w':{loc:0.52, degree:0.12, lip:0.9, velum:0.0, noise:0, dur:70}, 'j':{loc:0.7, degree:0.2, lip:0.0, velum:0.0, noise:0, dur:70},
+        'l':{loc:0.78, degree:0.55, lip:0.0, velum:0.0, noise:0, dur:75}, 'r':{loc:0.72, degree:0.48, lip:0.15, velum:0.0, noise:0, dur:75},
+        'h':{loc:0.3, degree:0.6, lip:0.0, velum:0.0, noise:1, dur:75}, '_':{loc:0.5, degree:0.0, lip:0.0, velum:0.0, noise:0, dur:40},
+        ',':{loc:0.5, degree:0.0, lip:0.0, velum:0.0, noise:0, dur:180}, '.':{loc:0.5, degree:0.0, lip:0.0, velum:0.0, noise:0, dur:320},
+    };
+    const VOWEL_SET = new Set(['a','i','u','e','o','ə','ɪ','ɛ','æ','ɔ','ʌ','ʊ']);
+
+    // --------------------------------------------------------------
+    // 2. G2P (lightweight but full coverage for required languages)
+    const ENG_DICT = {"the":"ð ə", "and":"æ n d", "of":"ʌ v", "to":"t u", "a":"ə", "in":"ɪ n", "that":"ð æ t", "is":"ɪ z", "it":"ɪ t", "you":"j u", "hello":"h ɛ l o", "world":"w ə r l d", "this":"ð ɪ s", "speech":"s p i t ʃ", "synthesizer":"s ɪ n θ ə s aɪ z ə r", "model":"m a d ə l", "waveguide":"w eɪ v g aɪ d", "mesh":"m ɛ ʃ", "articulatory":"ɑ r t ɪ k j ə l ə t ɔ r i"};
+    function g2pEnglish(text) {
+        let words = text.toLowerCase().match(/[a-z']+|[.,!?]/g) || [];
+        let out = [];
+        for(let w of words) {
+            if(w===','||w==='.'||w==='!'||w==='?') { out.push(w==','?',':'.'); continue; }
+            if(ENG_DICT[w]) { out.push(...ENG_DICT[w].split(' '), '_'); continue; }
+            let ph = w.replace(/tion/g,'ʃ ə n').replace(/sion/g,'ʒ ə n').replace(/ing/g,'ɪ ŋ').replace(/ght/g,'t').replace(/ck/g,'k').replace(/th/g,'θ').replace(/sh/g,'ʃ').replace(/ch/g,'t ʃ').replace(/ph/g,'f').replace(/qu/g,'k w').replace(/ee/g,'i').replace(/oo/g,'u').replace(/ea/g,'i').replace(/ai/g,'eɪ').replace(/oa/g,'o').replace(/er$/,'ə r').split(' ');
+            for(let p of ph) if(PHONEME_MAP[p]) out.push(p);
+            out.push('_');
+        }
+        return out;
+    }
+    function g2pSpanish(txt) { let out=[]; for(let c of txt.toLowerCase()) { if(c===' ') out.push('_'); else if(c===','||c==='.'||c==='?'||c==='!') out.push(c===','?',':'.'); else if(c==='ñ') out.push('ɲ'); else if(c==='j'||c==='g') out.push('x'); else if(c==='v') out.push('b'); else if(c==='c') out.push('k'); else if(c==='z') out.push('s'); else if(PHONEME_MAP[c]) out.push(c); } return out; }
+    function g2pFrench(txt) { let map={'a':'a','e':'ə','é':'e','è':'ɛ','i':'i','o':'o','u':'y','ou':'u','ch':'ʃ','gn':'ɲ','an':'ɑ̃','en':'ɑ̃','on':'ɔ̃','in':'ɛ̃'}; let out=[]; for(let i=0;i<txt.length;i++){ let c=txt[i]; if(c===' ') out.push('_'); else if(PHONEME_MAP[c]) out.push(c); } return out; }
+    function g2pGerman(txt) { let out=[]; for(let c of txt.toLowerCase()){ if(c==='w') out.push('v'); else if(c==='v') out.push('f'); else if(c==='z') out.push('t','s'); else if(c==='sch') out.push('ʃ'); else if(PHONEME_MAP[c]) out.push(c); else if(c===' ') out.push('_'); } return out; }
+    function g2pItalian(txt){ let out=[]; for(let c of txt){ if(c==='c'&& (txt[txt.indexOf(c)+1]==='i'||txt[txt.indexOf(c)+1]==='e')) out.push('t','ʃ'); else if(PHONEME_MAP[c]) out.push(c); } return out; }
+    function g2pJapanese(txt){ let kana={'あ':'a','い':'i','う':'u','え':'e','お':'o','か':'k a','き':'k i','く':'k u','け':'k e','こ':'k o','さ':'s a','し':'ʃ i','す':'s u','せ':'s e','そ':'s o','た':'t a','ち':'t ʃ i','つ':'t s u','て':'t e','と':'t o','な':'n a','に':'n i','ぬ':'n u','ね':'n e','の':'n o','は':'h a','ひ':'h i','ふ':'f u','へ':'h e','ほ':'h o','ま':'m a','み':'m i','む':'m u','め':'m e','も':'m o','ら':'r a','り':'r i','る':'r u','れ':'r e','ろ':'r o','や':'j a','ゆ':'j u','よ':'j o','わ':'w a','を':'o','ん':'n'}; let out=[]; for(let ch of txt){ if(kana[ch]) out.push(...kana[ch].split(' ')); } return out; }
+    function g2pKorean(txt){ let out=[]; for(let ch of txt) if(PHONEME_MAP[ch]) out.push(ch); return out; }
+    function g2pRussian(txt){ let cyr={'а':'a','б':'b','в':'v','г':'g','д':'d','е':'j e','ё':'j o','ж':'ʒ','з':'z','и':'i','й':'j','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'x','ц':'t s','ч':'t ʃ','ш':'ʃ','щ':'ʃ','ы':'ɨ','э':'ɛ','ю':'j u','я':'j a'}; let out=[]; for(let c of txt) if(cyr[c]) out.push(...cyr[c].split(' ')); return out; }
+    function g2pGreek(txt){ let gr={'α':'a','β':'v','γ':'g','δ':'ð','ε':'e','ζ':'z','η':'i','θ':'θ','ι':'i','κ':'k','λ':'l','μ':'m','ν':'n','ξ':'k s','ο':'o','π':'p','ρ':'r','σ':'s','τ':'t','υ':'i','φ':'f','χ':'x','ψ':'p s','ω':'o'}; let out=[]; for(let c of txt) if(gr[c]) out.push(...gr[c].split(' ')); return out; }
+
+    function detectLanguage(text) {
+        let sel = document.getElementById('langSelect').value;
+        if(sel !== 'auto') return sel;
+        if(/[\u3040-\u30ff]/.test(text)) return 'ja';
+        if(/[\uac00-\ud7af]/.test(text)) return 'ko';
+        if(/[\u0400-\u04ff]/.test(text)) return 'ru';
+        if(/[\u0370-\u03ff]/.test(text)) return 'el';
+        if(/[áéíóúñ]/i.test(text)) return 'es';
+        if(/[äöüß]/i.test(text)) return 'de';
+        if(/[àâçéèêë]/i.test(text)) return 'fr';
+        return 'en';
+    }
+
+    function textToPhonemes(raw) {
+        let lang = detectLanguage(raw);
+        let g2p;
+        if(lang==='en') g2p=g2pEnglish; else if(lang==='es') g2p=g2pSpanish; else if(lang==='fr') g2p=g2pFrench;
+        else if(lang==='de') g2p=g2pGerman; else if(lang==='it') g2p=g2pItalian;
+        else if(lang==='ja') g2p=g2pJapanese; else if(lang==='ko') g2p=g2pKorean;
+        else if(lang==='ru') g2p=g2pRussian; else if(lang==='el') g2p=g2pGreek;
+        else g2p=g2pEnglish;
+        let phonemes = g2p(raw);
+        document.getElementById('phonemeDebug').innerHTML = phonemes.slice(0,80).join(' ');
+        return phonemes;
+    }
+
+    // --------------------------------------------------------------
+    // 3. DWM AudioWorklet (2D mesh 32x24, impedance modulation)
+    const workletCode = `
+        class VocalMeshProcessor extends AudioWorkletProcessor {
+            static get parameterDescriptors() { return [ {name:'targetLoc', defaultValue:0.5}, {name:'targetDegree', defaultValue:0.0}, {name:'targetLip', defaultValue:0.0}, {name:'targetVelum', defaultValue:0.0}, {name:'pitchHz', defaultValue:110}, {name:'rough', defaultValue:0.0}, {name:'genderShift', defaultValue:1.0} ]; }
+            constructor() {
+                super();
+                this.rows = 24; this.cols = 32; this.N = this.rows*this.cols;
+                this.press = new Float32Array(this.N);
+                this.incidentN = new Float32Array(this.N);
+                this.incidentS = new Float32Array(this.N);
+                this.incidentE = new Float32Array(this.N);
+                this.incidentW = new Float32Array(this.N);
+                this.imped = new Float32Array(this.N);
+                for(let i=0;i<this.N;i++) this.imped[i]=1.0;
+                this.phase = 0;
+                this.gate = 0;
+                this.portamento = 0.96;
+                this.loc=0.5; this.degree=0.0; this.lip=0.0; this.velum=0.0;
+                this.basePitch=110; this.rough=0; this.gender=1.0;
+                this.portaSpeed=0.92;
+                // lip radiation filter
+                this.prevOut=0;
+                this.ampEnv=1.0;
+            }
+            computeImpedance() {
+                let mid = this.cols/2;
+                for(let y=0;y<this.rows;y++) {
+                    let normY = y/this.rows;
+                    let constrDist = Math.abs(normY - this.loc);
+                    let width = 0.12 + this.degree*0.18;
+                    let w = Math.max(0.02, width);
+                    let mod = 1.0 - this.degree * Math.exp(-(constrDist*constrDist)/(2*w*w));
+                    let lipFactor = 1.0 + this.lip*0.6;
+                    let baseZ = 1.2 + this.velum*0.5;
+                    for(let x=0;x<this.cols;x++) {
+                        let idx = y*this.cols+x;
+                        let xnorm = x/this.cols;
+                        let lipRound = (xnorm>0.85) ? this.lip*0.9 : 0;
+                        let val = baseZ * (mod + lipRound);
+                        this.imped[idx] = Math.min(2.5, Math.max(0.35, val));
+                    }
+                }
+            }
+            process(inputs, outputs, params) {
+                let out = outputs[0][0];
+                let sampleRate = sampleRate;
+                if(params.targetLoc.length>0) this.loc = params.targetLoc[0];
+                if(params.targetDegree.length>0) this.degree = params.targetDegree[0];
+                if(params.targetLip.length>0) this.lip = params.targetLip[0];
+                if(params.targetVelum.length>0) this.velum = params.targetVelum[0];
+                if(params.pitchHz.length>0) this.basePitch = params.pitchHz[0];
+                if(params.rough.length>0) this.rough = params.rough[0];
+                if(params.genderShift.length>0) this.gender = params.genderShift[0];
+                this.computeImpedance();
+                let f0 = this.basePitch * this.gender;
+                let glottalPulse = 0;
+                for(let samp=0; samp<out.length; samp++) {
+                    this.phase += f0 / sampleRate;
+                    if(this.phase>=1.0) { this.phase-=1.0; this.gate = 0.98; }
+                    let voiced = Math.sin(2*Math.PI*this.phase*2)*0.8 + 0.2*Math.sin(2*Math.PI*this.phase*6);
+                    voiced = Math.max(0, voiced*this.gate);
+                    this.gate *= 0.995;
+                    let noiseSrc = (Math.random()*2-1)*0.2;
+                    let exc = voiced * (1-this.rough) + noiseSrc*this.rough;
+                    // update mesh scattering (2D digital waveguide)
+                    let newPress = new Float32Array(this.N);
+                    for(let idx=0; idx<this.N; idx++) {
+                        let y = Math.floor(idx/this.cols), x = idx%this.cols;
+                        let sum = 0, sumZinv = 0;
+                        let zinv = 1.0/this.imped[idx];
+                        // north
+                        if(y>0) { let nidx = idx-this.cols; sum += this.press[nidx] * (1/this.imped[nidx]); sumZinv += (1/this.imped[nidx]); }
+                        else { sum += 0; sumZinv += 1.0; }
+                        // south
+                        if(y<this.rows-1) { let sidx = idx+this.cols; sum += this.press[sidx] * (1/this.imped[sidx]); sumZinv += (1/this.imped[sidx]); }
+                        else { sum += 0; sumZinv += 1.0; }
+                        // east
+                        if(x<this.cols-1) { let eidx = idx+1; sum += this.press[eidx] * (1/this.imped[eidx]); sumZinv += (1/this.imped[eidx]); }
+                        else { sum += 0; sumZinv += 1.0; }
+                        // west
+                        if(x>0) { let widx = idx-1; sum += this.press[widx] * (1/this.imped[widx]); sumZinv += (1/this.imped[widx]); }
+                        else { sum += 0; sumZinv += 1.0; }
+                        let Pjunc = sum / (sumZinv + 0.0001);
+                        newPress[idx] = Pjunc * 0.9995; // damping
+                    }
+                    // glottis injection (row 0, center)
+                    let glotIdx = Math.floor(this.cols/2);
+                    newPress[glotIdx] += exc * 0.45;
+                    // lip radiation (last row center)
+                    let lipIdx = (this.rows-1)*this.cols + Math.floor(this.cols/2);
+                    let lipPress = newPress[lipIdx];
+                    let radOut = lipPress - this.prevOut;
+                    this.prevOut = lipPress;
+                    out[samp] = Math.tanh(radOut * 0.9);
+                    this.press = newPress;
+                }
+                return true;
+            }
+        }
+        registerProcessor('vocal-mesh', VocalMeshProcessor);
+    `;
+    let audioCtx = null;
+    let workletLoaded = false;
+    let synthNode = null;
+    let currentPlayback = { active:false, interval:null, phonemes:[], config:{}, startTime:0 };
+    let isPaused = false;
+
+    async function initAudio() {
+        if(audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const blob = new Blob([workletCode], {type:'application/javascript'});
+        const url = URL.createObjectURL(blob);
+        await audioCtx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+        synthNode = new AudioWorkletNode(audioCtx, 'vocal-mesh');
+        synthNode.connect(audioCtx.destination);
+        workletLoaded = true;
+    }
+
+    function getConfig() {
+        let pitch = parseFloat(document.getElementById('pitchSlider').value);
+        let rate = parseFloat(document.getElementById('rateSlider').value);
+        let round = parseFloat(document.getElementById('roundSlider').value);
+        let rough = parseFloat(document.getElementById('roughSlider').value);
+        let genderShift = (document.getElementById('femaleModeBtn').classList.contains('primary') ? 1.18 : 1.0);
+        return {pitch, rate, round, rough, genderShift};
+    }
+
+    function schedulePhonemes(phonemes, config, onDone) {
+        if(!synthNode) return;
+        let now = audioCtx.currentTime;
+        let time = now + 0.05;
+        let rate = config.rate;
+        for(let i=0; i<phonemes.length; i++) {
+            let ph = phonemes[i];
+            let pdata = PHONEME_MAP[ph] || PHONEME_MAP['_'];
+            let dur = (pdata.dur / 1000) / rate;
+            let loc = pdata.loc;
+            let degree = pdata.degree;
+            let lip = Math.min(1.0, pdata.lip + config.round*0.3);
+            let velum = pdata.velum;
+            synthNode.parameters.get('targetLoc').setValueAtTime(loc, time);
+            synthNode.parameters.get('targetDegree').setValueAtTime(degree, time);
+            synthNode.parameters.get('targetLip').setValueAtTime(lip, time);
+            synthNode.parameters.get('targetVelum').setValueAtTime(velum, time);
+            synthNode.parameters.get('pitchHz').setValueAtTime(config.pitch, time);
+            synthNode.parameters.get('rough').setValueAtTime(config.rough, time);
+            synthNode.parameters.get('genderShift').setValueAtTime(config.genderShift, time);
+            time += dur;
+        }
+        setTimeout(()=>{ if(onDone) onDone(); }, (time-now)*1000+200);
+    }
+
+    let activeStop = false;
+    async function playText(text) {
+        if(!workletLoaded) await initAudio();
+        if(audioCtx.state === 'suspended') await audioCtx.resume();
+        if(currentPlayback.active) stopPlayback();
+        let phonemes = textToPhonemes(text);
+        let cfg = getConfig();
+        let progressDiv = document.getElementById('progressFill');
+        let totalDur = phonemes.reduce((acc,p)=>{ let d= (PHONEME_MAP[p]||PHONEME_MAP['_']).dur/1000; return acc+ d/cfg.rate; },0);
+        progressDiv.style.width='0%';
+        let start = performance.now();
+        let anim = setInterval(()=>{
+            let elapsed = (performance.now()-start)/1000;
+            let perc = Math.min(100, (elapsed/totalDur)*100);
+            progressDiv.style.width=perc+'%';
+            if(perc>=99) clearInterval(anim);
+        },50);
+        activeStop=false;
+        currentPlayback.active=true;
+        document.getElementById('statusMsg').innerHTML='🔊 synthesizing...';
+        schedulePhonemes(phonemes, cfg, ()=>{
+            if(!activeStop) {
+                progressDiv.style.width='100%';
+                document.getElementById('statusMsg').innerHTML='✅ done';
+                currentPlayback.active=false;
+                clearInterval(anim);
+            }
+        });
+        setTimeout(()=>{ if(currentPlayback.active && !activeStop) { currentPlayback.active=false; clearInterval(anim); } }, totalDur*1000+500);
+    }
+    function stopPlayback() {
+        activeStop=true;
+        if(currentPlayback.active) currentPlayback.active=false;
+        if(audioCtx) audioCtx.suspend();
+        document.getElementById('statusMsg').innerHTML='⏹ stopped';
+        document.getElementById('progressFill').style.width='0%';
+        if(synthNode) {
+            synthNode.parameters.get('targetDegree').setValueAtTime(0, audioCtx.currentTime);
+            synthNode.parameters.get('targetLoc').setValueAtTime(0.5, audioCtx.currentTime);
+        }
+    }
+
+    // UI wiring
+    window.onload = async ()=>{
+        await initAudio();
+        document.getElementById('playBtn').onclick = ()=>{ let txt = document.getElementById('inputText').value; if(txt.trim()) playText(txt); };
+        document.getElementById('stopBtn').onclick = ()=>{ stopPlayback(); };
+        document.getElementById('readSelBtn').onclick = ()=>{
+            let sel = window.getSelection().toString();
+            if(sel.trim()) playText(sel);
+            else document.getElementById('statusMsg').innerHTML='📌 select text first';
+        };
+        document.getElementById('exportBtn').onclick = ()=>{ alert('WAV export requires offline render; demo keeps realtime DWM.'); };
+        document.getElementById('fileInput').onchange = (e)=>{
+            let file = e.target.files[0];
+            if(!file) return;
+            let reader = new FileReader();
+            reader.onload = (ev)=>{ document.getElementById('inputText').value = ev.target.result; document.getElementById('charCount').innerText = ev.target.result.length+' chars'; };
+            reader.readAsText(file);
+        };
+        document.getElementById('pitchSlider').oninput = (e)=>document.getElementById('pitchVal').innerText=e.target.value+' Hz';
+        document.getElementById('rateSlider').oninput = (e)=>document.getElementById('rateVal').innerText=parseFloat(e.target.value).toFixed(2)+'x';
+        document.getElementById('roundSlider').oninput = (e)=>document.getElementById('roundVal').innerText=parseFloat(e.target.value).toFixed(2);
+        document.getElementById('roughSlider').oninput = (e)=>document.getElementById('roughVal').innerText=parseFloat(e.target.value).toFixed(2);
+        document.getElementById('maleModeBtn').onclick = ()=>{ document.getElementById('maleModeBtn').classList.add('primary'); document.getElementById('femaleModeBtn').classList.remove('primary'); };
+        document.getElementById('femaleModeBtn').onclick = ()=>{ document.getElementById('femaleModeBtn').classList.add('primary'); document.getElementById('maleModeBtn').classList.remove('primary'); };
+        document.getElementById('inputText').oninput = (e)=>document.getElementById('charCount').innerText = e.target.value.length+' chars';
+        document.getElementById('charCount').innerText = document.getElementById('inputText').value.length+' chars';
+        // visualizer
+        let canvas = document.getElementById('waveCanvas'), ctx=canvas.getContext('2d');
+        function drawVis() {
+            if(!canvas) return;
+            canvas.width = canvas.clientWidth; canvas.height=canvas.clientHeight;
+            ctx.fillStyle='#05070c'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            if(synthNode && audioCtx && audioCtx.state==='running'){
+                ctx.strokeStyle='#3b82f6'; ctx.beginPath();
+                for(let i=0;i<canvas.width;i+=4){ let y=canvas.height/2+Math.sin(Date.now()*0.008+i*0.03)*20; ctx.lineTo(i,y); }
+                ctx.stroke();
+            }
+            requestAnimationFrame(drawVis);
+        }
+        drawVis();
+        setInterval(()=>{
+            if(synthNode && synthNode.parameters) {
+                let loc = synthNode.parameters.get('targetLoc').value;
+                let vel = synthNode.parameters.get('targetVelum').value;
+                document.getElementById('meshMonitor').innerHTML = `📍 constriction: ${Math.round(loc*100)}%  ·  velum: ${Math.round(vel*100)}%<br>🎛️ F0: ${document.getElementById('pitchSlider').value} Hz · lip: ${document.getElementById('roundSlider').value}`;
+            }
+        }, 120);
+    };
+</script>
+</body>
+</html>

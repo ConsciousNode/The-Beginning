@@ -1,0 +1,961 @@
+
+The following is a Webster formant synthesizer HTML file that was truncated mid-code. The file cuts off inside the French G2P  at this line:
+
+const map = {
+                            'a': 'a', 'à': 'a', 'â': 'a', 'b': 'b', 'c': 'k',
+                            'ç': 's', 'd': 'd', 'e': 'ə', 'é': 'e', 'è': 'ɛ',
+                            'ê': 'ɛ', 'f': 'f', 'g': 'g', 'h': '', 'i': 'i',
+                            'î': 'i', 'ï': 'i', 'j': 'ʒ', 'k': 'k', 'l': 'l',
+                            'm': 'm', 'n':
+
+Do not reproduce anything before this line. Continue the file from exactly this point and complete it fully. 
+Output only the continuation of the file through to `</html>`. Do not include anything before that line.
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhonForge - Formant Synthesizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0ff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid #2a2a4a;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            color: #8888aa;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            background: rgba(20, 20, 40, 0.6);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.9em;
+            color: #8888cc;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            background: #0f0f1f;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            color: #e0e0ff;
+            font-size: 1em;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 8px;
+            background: #2a2a4a;
+            border-radius: 4px;
+        }
+
+        .range-value {
+            text-align: center;
+            color: #00d4ff;
+            font-weight: bold;
+        }
+
+        .voice-toggle {
+            display: flex;
+            gap: 10px;
+        }
+
+        .voice-btn {
+            flex: 1;
+            padding: 10px;
+            background: #0f0f1f;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            color: #8888cc;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .voice-btn.active {
+            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            color: white;
+            border-color: transparent;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .input-section {
+            background: rgba(20, 20, 40, 0.6);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #2a2a4a;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 250px;
+            background: #0f0f1f;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            color: #e0e0ff;
+            padding: 15px;
+            font-size: 1.1em;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+        }
+
+        .file-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #2a2a4a;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a5a;
+            box-shadow: 0 5px 20px rgba(100, 100, 150, 0.3);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+        }
+
+        .btn-stop:hover {
+            box-shadow: 0 5px 20px rgba(255, 65, 108, 0.4);
+        }
+
+        .stats {
+            margin-top: 10px;
+            color: #8888aa;
+            font-size: 0.9em;
+        }
+
+        .visualizer-section {
+            background: rgba(20, 20, 40, 0.6);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #2a2a4a;
+        }
+
+        canvas {
+            width: 100%;
+            height: 150px;
+            background: #0a0a15;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .progress-section {
+            margin-top: 20px;
+            background: rgba(20, 20, 40, 0.6);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #0f0f1f;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .current-word {
+            margin-top: 10px;
+            color: #00d4ff;
+            font-size: 1.2em;
+            min-height: 30px;
+        }
+
+        .debug-section {
+            margin-top: 20px;
+            background: rgba(20, 20, 40, 0.6);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .debug-content {
+            margin-top: 15px;
+            padding: 15px;
+            background: #0f0f1f;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #88ff88;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .debug-content.visible {
+            display: block;
+        }
+
+        .toggle-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s;
+        }
+
+        .toggle-icon.rotated {
+            transform: rotate(180deg);
+        }
+
+        .phoneme-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #2a2a4a;
+            border-radius: 4px;
+            margin: 2px;
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ PhonForge</h1>
+            <p class="subtitle">Pure Formant Speech Synthesis Engine</p>
+        </header>
+
+        <div class="control-panel">
+            <div class="control-group">
+                <label>Language</label>
+                <select id="languageSelect">
+                    <option value="auto">Auto-detect</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="it">Italian</option>
+                    <option value="el">Greek</option>
+                    <option value="ru">Russian</option>
+                    <option value="bg">Bulgarian</option>
+                    <option value="uk">Ukrainian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Pitch (Hz)</label>
+                <input type="range" id="pitchSlider" min="80" max="220" value="120">
+                <div class="range-value" id="pitchValue">120 Hz</div>
+            </div>
+            <div class="control-group">
+                <label>Speech Rate</label>
+                <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="1">
+                <div class="range-value" id="rateValue">1.0x</div>
+            </div>
+            <div class="control-group">
+                <label>Voice Character</label>
+                <div class="voice-toggle">
+                    <button class="voice-btn active" id="maleBtn">Male</button>
+                    <button class="voice-btn" id="femaleBtn">Female</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <textarea id="textInput" placeholder="Enter text to synthesize...">Hello, world! This is a test of the PhonForge speech synthesizer.</textarea>
+                <div class="file-controls">
+                    <input type="file" id="fileInput" accept=".txt,.md,.html,.srt" style="display: none;">
+                    <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">📁 Load File</button>
+                    <button id="playBtn">▶ Play</button>
+                    <button id="stopBtn" class="btn-stop">⏹ Stop</button>
+                    <button id="selectionBtn" class="btn-secondary">🔊 Read Selection</button>
+                </div>
+                <div class="stats">
+                    <span id="charCount">0</span> characters | <span id="wordCount">0</span> words
+                </div>
+            </div>
+
+            <div class="visualizer-section">
+                <label>Waveform</label>
+                <canvas id="visualizer"></canvas>
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <label>Playback Progress</label>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="current-word" id="currentWord"></div>
+        </div>
+
+        <div class="debug-section">
+            <div class="debug-header" onclick="toggleDebug()">
+                <label>Phoneme Debug Panel</label>
+                <span class="toggle-icon" id="toggleIcon">▼</span>
+            </div>
+            <div class="debug-content" id="debugContent">
+                <div id="phonemeOutput">Select text and click "Read Selection" to see phoneme sequence</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // PHONEME DATA - Formant frequencies (Hz)
+        // ==========================================
+        
+        const VOWELS = {
+            'a': { F1: 800, F2: 1200, F3: 2500 },    // father
+            'æ': { F1: 700, F2: 1800, F3: 2600 },    // cat
+            'e': { F1: 600, F2: 2000, F3: 2800 },    // bed
+            'i': { F1: 300, F2: 2600, F3: 3200 },    // see
+            'ɪ': { F1: 400, F2: 2000, F3: 2600 },    // bit
+            'o': { F1: 500, F2: 900, F3: 2500 },     // go
+            'ɔ': { F1: 600, F2: 800, F3: 2500 },     // law
+            'u': { F1: 300, F2: 800, F3: 2300 },     // food
+            'ʊ': { F1: 400, F2: 1000, F3: 2300 },     // foot
+            'ʌ': { F1: 700, F2: 1200, F3: 2500 },     // cup
+            'ə': { F1: 500, F2: 1500, F3: 2500 },     // schwa
+            'ɛ': { F1: 580, F2: 1800, F3: 2600 },     // red
+            'ɑ': { F1: 750, F2: 1100, F3: 2400 },     // hot
+            'ɒ': { F1: 600, F2: 900, F3: 2400 },      // British hot
+            'ø': { F1: 400, F2: 1800, F3: 2600 },     // French/German
+            'y': { F1: 300, F2: 1800, F3: 2400 },     // French/German u
+            'ɨ': { F1: 350, F2: 1600, F3: 2400 },     // Russian ы
+            'ɯ': { F1: 300, F2: 700, F3: 2200 },      // Japanese u
+            'ɰi': { F1: 350, F2: 1400, F3: 2300 },    // Korean ㅢ
+        };
+
+        // Diphthongs - arrays of vowels to interpolate
+        const DIPHTHONGS = {
+            'aɪ': ['a', 'ɪ'],
+            'aʊ': ['a', 'ʊ'],
+            'oɪ': ['ɔ', 'ɪ'],
+            'eɪ': ['e', 'ɪ'],
+            'oʊ': ['o', 'ʊ'],
+            'ɔɪ': ['ɔ', 'ɪ'],
+            'ja': ['i', 'a'],
+            'je': ['i', 'e'],
+            'jɛ': ['i', 'ɛ'],
+            'jo': ['i', 'o'],
+            'ju': ['i', 'u'],
+            'wi': ['u', 'i'],
+            'wa': ['u', 'a'],
+            'we': ['u', 'e'],
+            'wɛ': ['u', 'ɛ'],
+        };
+
+        // Consonant types for synthesis
+        const CONSONANTS = {
+            // Plosives (voiced/unvoiced)
+            'p': { type: 'plosive', voiced: false },
+            'b': { type: 'plosive', voiced: true },
+            't': { type: 'plosive', voiced: false },
+            'd': { type: 'plosive', voiced: true },
+            'k': { type: 'plosive', voiced: false },
+            'g': { type: 'plosive', voiced: true },
+            // Fricatives
+            'f': { type: 'fricative', voiced: false, freq: 4000 },
+            'v': { type: 'fricative', voiced: true, freq: 4000 },
+            'θ': { type: 'fricative', voiced: false, freq: 6000 },
+            'ð': { type: 'fricative', voiced: true, freq: 6000 },
+            's': { type: 'fricative', voiced: false, freq: 7000 },
+            'z': { type: 'fricative', voiced: true, freq: 7000 },
+            'ʃ': { type: 'fricative', voiced: false, freq: 2500 },
+            'ʒ': { type: 'fricative', voiced: true, freq: 2500 },
+            'h': { type: 'fricative', voiced: false, freq: 1000 },
+            'x': { type: 'fricative', voiced: false, freq: 3000 },
+            'ç': { type: 'fricative', voiced: false, freq: 3500 },
+            // Affricates
+            'tʃ': { type: 'affricate', voiced: false },
+            'dʒ': { type: 'affricate', voiced: true },
+            'ts': { type: 'affricate', voiced: false },
+            'dz': { type: 'affricate', voiced: true },
+            // Nasals
+            'm': { type: 'nasal', freq: 250 },
+            'n': { type: 'nasal', freq: 250 },
+            'ŋ': { type: 'nasal', freq: 280 },
+            'ɲ': { type: 'nasal', freq: 300 },
+            // Liquids/Glides
+            'l': { type: 'liquid', formant: { F1: 400, F2: 1200, F3: 2500 } },
+            'r': { type: 'liquid', formant: { F1: 350, F2: 1200, F3: 1800 } },
+            'w': { type: 'glide', formant: { F1: 300, F2: 800, F3: 2300 } },
+            'j': { type: 'glide', formant: { F1: 300, F2: 2200, F3: 3000 } },
+            // Trill/Tap
+            'ʀ': { type: 'trill', formant: { F1: 350, F2: 1200, F3: 1800 } },
+            'ɾ': { type: 'tap', formant: { F1: 350, F2: 1200, F3: 1800 } },
+        };
+
+        // ==========================================
+        // ENGLISH DICTIONARY (500 most common words)
+        // ==========================================
+        
+        const ENGLISH_DICT = {
+            'the': 'ðə', 'be': 'bi', 'to': 'tu', 'of': 'ʌv', 'and': 'ænd',
+            'a': 'eɪ', 'in': 'ɪn', 'that': 'ðæt', 'have': 'hæv', 'i': 'aɪ',
+            'it': 'ɪt', 'for': 'fɔr', 'not': 'nɑt', 'on': 'ɑn', 'with': 'wɪð',
+            'he': 'hi', 'as': 'æz', 'you': 'ju', 'do': 'du', 'at': 'æt',
+            'this': 'ðɪs', 'but': 'bʌt', 'his': 'hɪz', 'by': 'baɪ', 'from': 'frʌm',
+            'they': 'ðeɪ', 'we': 'wi', 'say': 'seɪ', 'her': 'hɜr', 'she': 'ʃi',
+            'or': 'ɔr', 'an': 'æn', 'will': 'wɪl', 'my': 'maɪ', 'one': 'wʌn',
+            'all': 'ɔl', 'would': 'wʊd', 'there': 'ðɛr', 'their': 'ðɛr', 'what': 'wʌt',
+            'so': 'soʊ', 'up': 'ʌp', 'out': 'aʊt', 'if': 'ɪf', 'about': 'əˈbaʊt',
+            'who': 'hu', 'get': 'gɛt', 'which': 'wɪtʃ', 'go': 'goʊ', 'me': 'mi',
+            'when': 'wɛn', 'make': 'meɪk', 'can': 'kæn', 'like': 'laɪk', 'time': 'taɪm',
+            'no': 'noʊ', 'just': 'dʒʌst', 'him': 'hɪm', 'know': 'noʊ', 'take': 'teɪk',
+            'people': 'ˈpipəl', 'into': 'ˈɪntu', 'year': 'jɪr', 'your': 'jɔr', 'good': 'gʊd',
+            'some': 'sʌm', 'could': 'kʊd', 'them': 'ðɛm', 'see': 'si', 'other': 'ˈʌðər',
+            'than': 'ðæn', 'then': 'ðɛn', 'now': 'naʊ', 'look': 'lʊk', 'only': 'ˈoʊnli',
+            'come': 'kʌm', 'its': 'ɪts', 'over': 'ˈoʊvər', 'think': 'θɪŋk', 'also': 'ˈɔlsoʊ',
+            'back': 'bæk', 'after': 'ˈæftər', 'use': 'jus', 'two': 'tu', 'how': 'haʊ',
+            'our': 'ˈaʊər', 'work': 'wɜrk', 'first': 'fɜrst', 'well': 'wɛl', 'way': 'weɪ',
+            'even': 'ˈivən', 'new': 'nu', 'want': 'wɑnt', 'because': 'bɪˈkɔz', 'any': 'ˈɛni',
+            'these': 'ðiz', 'give': 'gɪv', 'day': 'deɪ', 'most': 'moʊst', 'us': 'ʌs',
+            'is': 'ɪz', 'was': 'wʌz', 'are': 'ɑr', 'were': 'wɜr', 'been': 'bɪn',
+            'has': 'hæz', 'had': 'hæd', 'did': 'dɪd', 'does': 'dʌz', 'doing': 'ˈduɪŋ',
+            'being': 'ˈbiɪŋ', 'having': 'ˈhævɪŋ', 'getting': 'ˈgɛtɪŋ', 'making': 'ˈmeɪkɪŋ', 'going': 'ˈgoʊɪŋ',
+            'knowing': 'ˈnoʊɪŋ', 'taking': 'ˈteɪkɪŋ', 'seeing': 'ˈsiɪŋ', 'coming': 'ˈkʌmɪŋ', 'looking': 'ˈlʊkɪŋ',
+            'using': 'ˈjuzɪŋ', 'finding': 'ˈfaɪndɪŋ', 'giving': 'ˈgɪvɪŋ', 'telling': 'ˈtɛlɪŋ', 'asking': 'ˈæskɪŋ',
+            'working': 'ˈwɜrkɪŋ', 'seeming': 'ˈsimɪŋ', 'feeling': 'ˈfilɪŋ', 'trying': 'ˈtraɪɪŋ', 'leaving': 'ˈlivɪŋ',
+            'calling': 'ˈkɔlɪŋ', 'keep': 'kip', 'let': 'lɛt', 'begin': 'bɪˈgɪn', 'seem': 'sim',
+            'help': 'hɛlp', 'show': 'ʃoʊ', 'hear': 'hɪr', 'play': 'pleɪ', 'run': 'rʌn',
+            'move': 'muv', 'live': 'lɪv', 'believe': 'bɪˈliv', 'bring': 'brɪŋ', 'happen': 'ˈhæpən',
+            'stand': 'stænd', 'lose': 'luz', 'pay': 'peɪ', 'meet': 'mit', 'include': 'ɪnˈklud',
+            'continue': 'kənˈtɪnju', 'set': 'sɛt', 'learn': 'lɜrn', 'change': 'tʃeɪndʒ', 'lead': 'lid',
+            'understand': 'ˌʌndərˈstænd', 'watch': 'wɑtʃ', 'follow': 'ˈfɑloʊ', 'stop': 'stɑp', 'create': 'kriˈeɪt',
+            'speak': 'spik', 'read': 'rid', 'allow': 'əˈlaʊ', 'add': 'æd', 'spend': 'spɛnd',
+            'grow': 'groʊ', 'open': 'ˈoʊpən', 'walk': 'wɔk', 'offer': 'ˈɔfər', 'remember': 'rɪˈmɛmbər',
+            'love': 'lʌv', 'consider': 'kənˈsɪdər', 'appear': 'əˈpɪr', 'buy': 'baɪ', 'wait': 'weɪt',
+            'serve': 'sɜrv', 'die': 'daɪ', 'send': 'sɛnd', 'expect': 'ɪkˈspɛkt', 'build': 'bɪld',
+            'stay': 'steɪ', 'fall': 'fɔl', 'cut': 'kʌt', 'reach': 'ritʃ', 'kill': 'kɪl',
+            'remain': 'rɪˈmeɪn', 'suggest': 'səˈdʒɛst', 'raise': 'reɪz', 'pass': 'pæs', 'sell': 'sɛl',
+            'require': 'rɪˈkwaɪər', 'report': 'rɪˈpɔrt', 'decide': 'dɪˈsaɪd', 'pull': 'pʊl', 'return': 'rɪˈtɜrn',
+            'explain': 'ɪkˈspleɪn', 'carry': 'ˈkæri', 'develop': 'dɪˈvɛləp', 'hope': 'hoʊp', 'drive': 'draɪv',
+            'break': 'breɪk', 'receive': 'rɪˈsiv', 'agree': 'əˈgri', 'support': 'səˈpɔrt', 'remove': 'rɪˈmuv',
+            'return': 'rɪˈtɜrn', 'describe': 'dɪˈskraɪb', 'create': 'kriˈeɪt', 'add': 'æd', 'apply': 'əˈplaɪ',
+            'avoid': 'əˈvɔɪd', 'prepare': 'prɪˈpɛr', 'compare': 'kəmˈpɛr', 'declare': 'dɪˈklɛr', 'depend': 'dɪˈpɛnd',
+            'determine': 'dɪˈtɜrmɪn', 'differ': 'ˈdɪfər', 'drop': 'drɑp', 'earn': 'ɜrn', 'emphasize': 'ˈɛmfəˌsaɪz',
+            'enable': 'ɪˈneɪbəl', 'encourage': 'ɪnˈkʌrɪdʒ', 'establish': 'ɪˈstæblɪʃ', 'estimate': 'ˈɛstəˌmeɪt', 'exist': 'ɪgˈzɪst',
+            'expand': 'ɪkˈspænd', 'express': 'ɪkˈsprɛs', 'extend': 'ɪkˈstɛnd', 'face': 'feɪs', 'fail': 'feɪl',
+            'fill': 'fɪl', 'focus': 'ˈfoʊkəs', 'force': 'fɔrs', 'forget': 'fərˈgɛt', 'form': 'fɔrm',
+            'found': 'faʊnd', 'gain': 'geɪn', 'gather': 'ˈgæðər', 'get': 'gɛt', 'give': 'gɪv',
+            'handle': 'ˈhændəl', 'happen': 'ˈhæpən', 'head': 'hɛd', 'hear': 'hɪr', 'help': 'hɛlp',
+            'hide': 'haɪd', 'hit': 'hɪt', 'hold': 'hoʊld', 'hope': 'hoʊp', 'hurt': 'hɜrt',
+            'identify': 'aɪˈdɛntəˌfaɪ', 'ignore': 'ɪgˈnɔr', 'illustrate': 'ˈɪləˌstreɪt', 'imagine': 'ɪˈmædʒɪn', 'imply': 'ɪmˈplaɪ',
+            'improve': 'ɪmˈpruv', 'include': 'ɪnˈklud', 'increase': 'ɪnˈkris', 'indicate': 'ˈɪndɪˌkeɪt', 'influence': 'ˈɪnfluəns',
+            'inform': 'ɪnˈfɔrm', 'insist': 'ɪnˈsɪst', 'install': 'ɪnˈstɔl', 'intend': 'ɪnˈtɛnd', 'introduce': 'ˌɪntrəˈdus',
+            'invest': 'ɪnˈvɛst', 'investigate': 'ɪnˈvɛstəˌgeɪt', 'invite': 'ɪnˈvaɪt', 'involve': 'ɪnˈvɑlv', 'issue': 'ˈɪʃu',
+            'join': 'dʒɔɪn', 'jump': 'dʒʌmp', 'justify': 'ˈdʒʌstəˌfaɪ', 'keep': 'kip', 'kick': 'kɪk',
+            'kill': 'kɪl', 'kiss': 'kɪs', 'knock': 'nɑk', 'know': 'noʊ', 'lack': 'læk',
+            'last': 'læst', 'laugh': 'læf', 'lay': 'leɪ', 'lead': 'lid', 'leak': 'lik',
+            'lean': 'lin', 'leave': 'liv', 'lend': 'lɛnd', 'let': 'lɛt', 'lie': 'laɪ',
+            'lift': 'lɪft', 'like': 'laɪk', 'limit': 'ˈlɪmɪt', 'link': 'lɪŋk', 'list': 'lɪst',
+            'listen': 'ˈlɪsən', 'load': 'loʊd', 'locate': 'ˈloʊˌkeɪt', 'lock': 'lɑk', 'look': 'lʊk',
+            'maintain': 'meɪnˈteɪn', 'make': 'meɪk', 'manage': 'ˈmænɪdʒ', 'mark': 'mɑrk', 'match': 'mætʃ',
+            'matter': 'ˈmætər', 'measure': 'ˈmɛʒər', 'meet': 'mit', 'mention': 'ˈmɛnʃən', 'mind': 'maɪnd',
+            'miss': 'mɪs', 'mix': 'mɪks', 'monitor': 'ˈmɑnɪtər', 'mount': 'maʊnt', 'move': 'muv',
+            'name': 'neɪm', 'need': 'nid', 'note': 'noʊt', 'notice': 'ˈnoʊtɪs', 'obtain': 'əbˈteɪn',
+            'occur': 'əˈkɜr', 'offer': 'ˈɔfər', 'open': 'ˈoʊpən', 'order': 'ˈɔrdər', 'own': 'oʊn',
+            'pass': 'pæs', 'pay': 'peɪ', 'perform': 'pərˈfɔrm', 'permit': 'pərˈmɪt', 'pick': 'pɪk',
+            'place': 'pleɪs', 'plan': 'plæn', 'plant': 'plænt', 'play': 'pleɪ', 'point': 'pɔɪnt',
+            'prefer': 'prɪˈfɜr', 'prepare': 'prɪˈpɛr', 'present': 'ˈprɛzənt', 'press': 'prɛs', 'prevent': 'prɪˈvɛnt',
+            'produce': 'prəˈdus', 'promise': 'ˈprɑmɪs', 'propose': 'prəˈpoʊz', 'protect': 'prəˈtɛkt', 'prove': 'pruv',
+            'provide': 'prəˈvaɪd', 'publish': 'ˈpʌblɪʃ', 'pull': 'pʊl', 'purchase': 'ˈpɜrtʃəs', 'push': 'pʊʃ',
+            'put': 'pʊt', 'qualify': 'ˈkwɑləˌfaɪ', 'question': 'ˈkwɛstʃən', 'quit': 'kwɪt', 'quote': 'kwoʊt',
+            'raise': 'reɪz', 'reach': 'ritʃ', 'read': 'rid', 'realize': 'ˈriəˌlaɪz', 'receive': 'rɪˈsiv',
+            'recognize': 'ˈrɛkəgˌnaɪz', 'recommend': 'ˌrɛkəˈmɛnd', 'record': 'rɪˈkɔrd', 'reduce': 'rɪˈdus', 'refer': 'rɪˈfɜr',
+            'reflect': 'rɪˈflɛkt', 'refuse': 'rɪˈfjuz', 'regard': 'rɪˈgɑrd', 'relate': 'rɪˈleɪt', 'release': 'rɪˈlis',
+            'rely': 'rɪˈlaɪ', 'remain': 'rɪˈmeɪn', 'remember': 'rɪˈmɛmbər', 'remove': 'rɪˈmuv', 'repeat': 'rɪˈpit',
+            'replace': 'rɪˈpleɪs', 'reply': 'rɪˈplaɪ', 'report': 'rɪˈpɔrt', 'represent': 'ˌrɛprɪˈzɛnt', 'require': 'rɪˈkwaɪər',
+            'research': 'rɪˈsɜrtʃ', 'resolve': 'rɪˈzɑlv', 'respond': 'rɪˈspɑnd', 'rest': 'rɛst', 'result': 'rɪˈzʌlt',
+            'retain': 'rɪˈteɪn', 'retire': 'rɪˈtaɪər', 'return': 'rɪˈtɜrn', 'reveal': 'rɪˈvil', 'review': 'rɪˈvju',
+            'ride': 'raɪd', 'ring': 'rɪŋ', 'rise': 'raɪz', 'risk': 'rɪsk', 'roll': 'roʊl',
+            'run': 'rʌn', 'save': 'seɪv', 'say': 'seɪ', 'see': 'si', 'seek': 'sik',
+            'seem': 'sim', 'select': 'sɪˈlɛkt', 'sell': 'sɛl', 'send': 'sɛnd', 'serve': 'sɜrv',
+            'set': 'sɛt', 'settle': 'ˈsɛtəl', 'shake': 'ʃeɪk', 'share': 'ʃɛr', 'shift': 'ʃɪft',
+            'shine': 'ʃaɪn', 'ship': 'ʃɪp', 'shock': 'ʃɑk', 'shoot': 'ʃut', 'shop': 'ʃɑp',
+            'show': 'ʃoʊ', 'shut': 'ʃʌt', 'sing': 'sɪŋ', 'sink': 'sɪŋk', 'sit': 'sɪt',
+            'skill': 'skɪl', 'sleep': 'slip', 'slice': 'slaɪs', 'slide': 'slaɪd', 'slip': 'slɪp',
+            'slow': 'sloʊ', 'smell': 'smɛl', 'smile': 'smaɪl', 'smoke': 'smoʊk', 'snap': 'snæp',
+            'snow': 'snoʊ', 'solve': 'sɑlv', 'sort': 'sɔrt', 'sound': 'saʊnd', 'source': 'sɔrs',
+            'space': 'speɪs', 'speak': 'spik', 'speed': 'spid', 'spell': 'spɛl', 'spend': 'spɛnd',
+            'spill': 'spɪl', 'spin': 'spɪn', 'split': 'splɪt', 'spoil': 'spɔɪl', 'spot': 'spɑt',
+            'spread': 'sprɛd', 'spring': 'sprɪŋ', 'square': 'skwɛr', 'squeeze': 'skwiz', 'stable': 'ˈsteɪbəl',
+            'staff': 'stæf', 'stage': 'steɪdʒ', 'stand': 'stænd', 'star': 'stɑr', 'start': 'stɑrt',
+            'state': 'steɪt', 'stay': 'steɪ', 'steal': 'stil', 'step': 'stɛp', 'stick': 'stɪk',
+            'still': 'stɪl', 'stir': 'stɜr', 'stop': 'stɑp', 'store': 'stɔr', 'storm': 'stɔrm',
+            'story': 'ˈstɔri', 'strain': 'streɪn', 'strange': 'streɪndʒ', 'stream': 'strim', 'street': 'strit',
+            'strength': 'strɛŋθ', 'stress': 'strɛs', 'stretch': 'strɛtʃ', 'strike': 'straɪk', 'string': 'strɪŋ',
+            'strip': 'strɪp', 'stroke': 'stroʊk', 'strong': 'strɔŋ', 'structure': 'ˈstrʌktʃər', 'struggle': 'ˈstrʌgəl',
+            'study': 'ˈstʌdi', 'stuff': 'stʌf', 'style': 'staɪl', 'submit': 'səbˈmɪt', 'succeed': 'səkˈsid',
+            'such': 'sʌtʃ', 'suck': 'sʌk', 'sudden': 'ˈsʌdən', 'suffer': 'ˈsʌfər', 'sugar': 'ˈʃʊgər',
+            'suggest': 'səˈdʒɛst', 'suit': 'sut', 'summer': 'ˈsʌmər', 'sun': 'sʌn', 'super': 'ˈsupər',
+            'supply': 'səˈplaɪ', 'support': 'səˈpɔrt', 'suppose': 'səˈpoʊz', 'sure': 'ʃʊr', 'surface': 'ˈsɜrfɪs',
+            'surprise': 'sərˈpraɪz', 'surround': 'səˈraʊnd', 'survey': 'sərˈveɪ', 'survive': 'sərˈvaɪv', 'suspect': 'səˈspɛkt',
+            'swear': 'swɛr', 'sweep': 'swip', 'sweet': 'swit', 'swim': 'swɪm', 'swing': 'swɪŋ',
+            'switch': 'swɪtʃ', 'symbol': 'ˈsɪmbəl', 'system': 'ˈsɪstəm', 'table': 'ˈteɪbəl', 'tackle': 'ˈtækəl',
+            'tag': 'tæg', 'tail': 'teɪl', 'take': 'teɪk', 'talk': 'tɔk', 'tank': 'tæŋk',
+            'tap': 'tæp', 'tape': 'teɪp', 'target': 'ˈtɑrgɪt', 'task': 'tæsk', 'taste': 'teɪst',
+            'tax': 'tæks', 'tea': 'ti', 'teach': 'titʃ', 'team': 'tim', 'tear': 'tɪr',
+            'telephone': 'ˈtɛləˌfoʊn', 'tell': 'tɛl', 'temperature': 'ˈtɛmpərəˌtʃər', 'tend': 'tɛnd', 'term': 'tɜrm',
+            'terrible': 'ˈtɛrəbəl', 'test': 'tɛst', 'text': 'tɛkst', 'than': 'ðæn', 'thank': 'θæŋk',
+            'that': 'ðæt', 'the': 'ðə', 'theater': 'ˈθiətər', 'their': 'ðɛr', 'them': 'ðɛm',
+            'theme': 'θim', 'themselves': 'ðɛmˈsɛlvz', 'then': 'ðɛn', 'theory': 'ˈθiəri', 'there': 'ðɛr',
+            'these': 'ðiz', 'they': 'ðeɪ', 'thick': 'θɪk', 'thin': 'θɪn', 'thing': 'θɪŋ',
+            'think': 'θɪŋk', 'third': 'θɜrd', 'thirty': 'ˈθɜrti', 'this': 'ðɪs', 'those': 'ðoʊz',
+            'though': 'ðoʊ', 'thought': 'θɔt', 'thousand': 'ˈθaʊzənd', 'threat': 'θrɛt', 'three': 'θri',
+            'throat': 'θroʊt', 'through': 'θru', 'throw': 'θroʊ', 'thus': 'ðʌs', 'ticket': 'ˈtɪkɪt',
+            'tie': 'taɪ', 'tight': 'taɪt', 'time': 'taɪm', 'tiny': 'ˈtaɪni', 'tip': 'tɪp',
+            'tire': 'ˈtaɪər', 'title': 'ˈtaɪtəl', 'to': 'tu', 'today': 'təˈdeɪ', 'together': 'təˈgɛðər',
+            'tomorrow': 'təˈmɑroʊ', 'tone': 'toʊn', 'tongue': 'tʌŋ', 'tonight': 'təˈnaɪt', 'too': 'tu',
+            'tool': 'tul', 'tooth': 'tuθ', 'top': 'tɑp', 'total': 'ˈtoʊtəl', 'touch': 'tʌtʃ',
+            'tough': 'tʌf', 'tour': 'tʊr', 'toward': 'təˈwɔrd', 'towel': 'ˈtaʊəl', 'tower': 'ˈtaʊər',
+            'town': 'taʊn', 'toy': 'tɔɪ', 'trace': 'treɪs', 'track': 'træk', 'trade': 'treɪd',
+            'traffic': 'ˈtræfɪk', 'trail': 'treɪl', 'train': 'treɪn', 'transition': 'trænˈzɪʃən', 'translate': 'trænsˈleɪt',
+            'transport': 'ˈtrænspɔrt', 'trap': 'træp', 'trash': 'træʃ', 'travel': 'ˈtrævəl', 'treat': 'trit',
+            'tree': 'tri', 'tremendous': 'trəˈmɛndəs', 'trend': 'trɛnd', 'trial': 'ˈtraɪəl', 'triangle': 'ˈtraɪˌæŋgəl',
+            'trick': 'trɪk', 'trip': 'trɪp', 'troop': 'trup', 'trouble': 'ˈtrʌbəl', 'truck': 'trʌk',
+            'true': 'tru', 'truly': 'ˈtruli', 'trust': 'trʌst', 'truth': 'truθ', 'try': 'traɪ',
+            'tube': 'tub', 'tunnel': 'ˈtʌnəl', 'turn': 'tɜrn', 'twelve': 'twɛlv', 'twenty': 'ˈtwɛnti',
+            'twice': 'twaɪs', 'twin': 'twɪn', 'two': 'tu', 'type': 'taɪp', 'typical': 'ˈtɪpɪkəl',
+            'ugly': 'ˈʌgli', 'umbrella': 'ʌmˈbrɛlə', 'unable': 'ʌnˈeɪbəl', 'uncle': 'ˈʌŋkəl', 'under': 'ˈʌndər',
+            'understand': 'ˌʌndərˈstænd', 'uniform': 'ˈjunəˌfɔrm', 'union': 'ˈjunjən', 'unique': 'juˈnik', 'unit': 'ˈjunɪt',
+            'unite': 'juˈnaɪt', 'university': 'ˌjunɪˈvɜrsəti', 'unless': 'ʌnˈlɛs', 'until': 'ʌnˈtɪl', 'unusual': 'ʌnˈjuʒuəl',
+            'up': 'ʌp', 'upon': 'əˈpɑn', 'upper': 'ˈʌpər', 'upset': 'ʌpˈsɛt', 'urban': 'ˈɜrbən',
+            'urge': 'ɜrdʒ', 'use': 'jus', 'used': 'just', 'useful': 'ˈjusfəl', 'usual': 'ˈjuʒuəl',
+            'usually': 'ˈjuʒuəli', 'valley': 'ˈvæli', 'valuable': 'ˈvæljuəbəl', 'value': 'ˈvælju', 'van': 'væn',
+            'variety': 'vəˈraɪəti', 'various': 'ˈvɛriəs', 'vary': 'ˈvɛri', 'vast': 'væst', 'vegetable': 'ˈvɛdʒtəbəl',
+            'vehicle': 'ˈviɪkəl', 'venture': 'ˈvɛntʃər', 'version': 'ˈvɜrʒən', 'very': 'ˈvɛri', 'vessel': 'ˈvɛsəl',
+            'veteran': 'ˈvɛtərən', 'via': 'ˈvaɪə', 'victim': 'ˈvɪktɪm', 'victory': 'ˈvɪktəri', 'video': 'ˈvɪdioʊ',
+            'view': 'vju', 'village': 'ˈvɪlɪdʒ', 'violate': 'ˈvaɪəˌleɪt', 'violence': 'ˈvaɪələns', 'violent': 'ˈvaɪələnt',
+            'virtually': 'ˈvɜrtʃuəli', 'virtue': 'ˈvɜrtʃu', 'virus': 'ˈvaɪrəs', 'visible': 'ˈvɪzəbəl', 'vision': 'ˈvɪʒən',
+            'visit': 'ˈvɪzɪt', 'visitor': 'ˈvɪzɪtər', 'visual': 'ˈvɪʒuəl', 'vital': 'ˈvaɪtəl', 'voice': 'vɔɪs',
+            'volume': 'ˈvɑljum', 'volunteer': 'ˌvɑlənˈtɪr', 'vote': 'voʊt', 'vulnerable': 'ˈvʌlnərəbəl', 'wage': 'weɪdʒ',
+            'wait': 'weɪt', 'wake': 'weɪk', 'walk': 'wɔk', 'wall': 'wɔl', 'wander': 'ˈwɑndər',
+            'want': 'wɑnt', 'war': 'wɔr', 'warm': 'wɔrm', 'warn': 'wɔrn', 'warning': 'ˈwɔrnɪŋ',
+            'wash': 'wɑʃ', 'waste': 'weɪst', 'watch': 'wɑtʃ', 'water': 'ˈwɔtər', 'wave': 'weɪv',
+            'way': 'weɪ', 'we': 'wi', 'weak': 'wik', 'wealth': 'wɛlθ', 'weapon': 'ˈwɛpən',
+            'wear': 'wɛr', 'weather': 'ˈwɛðər', 'wedding': 'ˈwɛdɪŋ', 'week': 'wik', 'weekend': 'ˈwikˌɛnd',
+            'weekly': 'ˈwikli', 'weigh': 'weɪ', 'weight': 'weɪt', 'weird': 'wɪrd', 'welcome': 'ˈwɛlkəm',
+            'welfare': 'ˈwɛlˌfɛr', 'well': 'wɛl', 'west': 'wɛst', 'western': 'ˈwɛstərn', 'wet': 'wɛt',
+            'what': 'wʌt', 'whatever': 'wʌtˈɛvər', 'wheel': 'wil', 'when': 'wɛn', 'whenever': 'wɛnˈɛvər',
+            'where': 'wɛr', 'whereas': 'wɛrˈæz', 'whether': 'ˈwɛðər', 'which': 'wɪtʃ', 'while': 'waɪl',
+            'whisper': 'ˈwɪspər', 'white': 'waɪt', 'who': 'hu', 'whole': 'hoʊl', 'whom': 'hum',
+            'whose': 'huz', 'why': 'waɪ', 'wide': 'waɪd', 'widely': 'ˈwaɪdli', 'widespread': 'ˈwaɪdˌsprɛd',
+            'wife': 'waɪf', 'wild': 'waɪld', 'will': 'wɪl', 'willing': 'ˈwɪlɪŋ', 'win': 'wɪn',
+            'wind': 'wɪnd', 'window': 'ˈwɪndoʊ', 'wine': 'waɪn', 'wing': 'wɪŋ', 'winner': 'ˈwɪnər',
+            'winter': 'ˈwɪntər', 'wipe': 'waɪp', 'wire': 'waɪər', 'wisdom': 'ˈwɪzdəm', 'wise': 'waɪz',
+            'wish': 'wɪʃ', 'with': 'wɪð', 'withdraw': 'wɪðˈdrɔ', 'within': 'wɪðˈɪn', 'without': 'wɪðˈaʊt',
+            'witness': 'ˈwɪtnəs', 'woman': 'ˈwʊmən', 'wonder': 'ˈwʌndər', 'wonderful': 'ˈwʌndərfəl', 'wood': 'wʊd',
+            'wooden': 'ˈwʊdən', 'word': 'wɜrd', 'work': 'wɜrk', 'worker': 'ˈwɜrkər', 'working': 'ˈwɜrkɪŋ',
+            'works': 'wɜrks', 'workshop': 'ˈwɜrkʃɑp', 'world': 'wɜrld', 'worried': 'ˈwʌrid', 'worry': 'ˈwʌri',
+            'worth': 'wɜrθ', 'would': 'wʊd', 'wound': 'wund', 'wrap': 'ræp', 'write': 'raɪt',
+            'writer': 'ˈraɪtər', 'writing': 'ˈraɪtɪŋ', 'wrong': 'rɔŋ', 'yard': 'jɑrd', 'yeah': 'yæ',
+            'year': 'yɪr', 'yell': 'yɛl', 'yellow': 'ˈyɛloʊ', 'yes': 'yɛs', 'yesterday': 'ˈyɛstərˌdeɪ',
+            'yet': 'yɛt', 'yield': 'yild', 'you': 'yu', 'young': 'yʌŋ', 'your': 'yɔr',
+            'yours': 'yɔrz', 'yourself': 'yɔrˈsɛlf', 'youth': 'yuθ', 'zone': 'zoʊn', 'zoo': 'zu'
+        };
+
+        // ==========================================
+        // G2P MODULES
+        // ==========================================
+
+        const G2P = {
+            // Detect script type
+            detectScript(text) {
+                if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
+                if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return 'ko';
+                if (/[\u0400-\u04FF]/.test(text)) {
+                    if (/[щъыэ]/.test(text)) return 'ru';
+                    if (/[ѝќ]/.test(text)) return 'bg';
+                    if (/[ґєї]/.test(text)) return 'uk';
+                    return 'ru';
+                }
+                if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return 'el';
+                if (/[äöüß]/.test(text)) return 'de';
+                if (/[áéíóúüñ¿¡]/.test(text)) return 'es';
+                if (/[àâçéèêëïîôùûœ]/.test(text)) return 'fr';
+                return 'en';
+            },
+
+            // English G2P
+            english(text) {
+                const words = text.toLowerCase().match(/\b[\w']+\b|[.,!?;]/g) || [];
+                const phonemes = [];
+                
+                words.forEach(word => {
+                    if (/[.,!?;]/.test(word)) {
+                        phonemes.push({ type: 'punct', value: word });
+                        return;
+                    }
+                    
+                    // Check dictionary
+                    if (ENGLISH_DICT[word]) {
+                        phonemes.push(...this.parseIPAString(ENGLISH_DICT[word]));
+                        return;
+                    }
+                    
+                    // Rules-based fallback
+                    phonemes.push(...this.englishRules(word));
+                });
+                
+                return phonemes;
+            },
+
+            englishRules(word) {
+                const phonemes = [];
+                let i = 0;
+                
+                while (i < word.length) {
+                    // Silent e at end
+                    if (i === word.length - 1 && word[i] === 'e') {
+                        i++;
+                        continue;
+                    }
+                    
+                    // Digraphs
+                    const digraph = word.substring(i, i + 2);
+                    const digraphMap = {
+                        'th': 'θ', 'sh': 'ʃ', 'ch': 'tʃ', 'ph': 'f', 'wh': 'w',
+                        'ck': 'k', 'ng': 'ŋ', 'nk': 'ŋk', 'qu': 'kw',
+                        'ea': 'i', 'ee': 'i', 'oo': 'u', 'ou': 'aʊ', 'oi': 'oɪ',
+                        'ai': 'eɪ', 'ay': 'eɪ', 'ey': 'eɪ', 'oa': 'oʊ', 'ow': 'aʊ',
+                        'aw': 'ɔ', 'au': 'ɔ', 'ei': 'eɪ', 'ie': 'i', 'ue': 'u',
+                        'ew': 'ju', 'igh': 'aɪ', 'ought': 'ɔt', 'aught': 'ɔt'
+                    };
+                    
+                    if (digraphMap[digraph] && i < word.length - 1) {
+                        phonemes.push(...this.parseIPAString(digraphMap[digraph]));
+                        i += 2;
+                        continue;
+                    }
+                    
+                    // Single letters
+                    const char = word[i];
+                    const charMap = {
+                        'a': 'æ', 'e': 'ɛ', 'i': 'ɪ', 'o': 'ɑ', 'u': 'ʌ',
+                        'b': 'b', 'c': 'k', 'd': 'd', 'f': 'f', 'g': 'g',
+                        'h': 'h', 'j': 'dʒ', 'k': 'k', 'l': 'l', 'm': 'm',
+                        'n': 'n', 'p': 'p', 'q': 'k', 'r': 'r', 's': 's',
+                        't': 't', 'v': 'v', 'w': 'w', 'x': 'ks', 'y': 'j', 'z': 'z'
+                    };
+                    
+                    // Soft c/g before e,i,y
+                    if (char === 'c' && 'eiy'.includes(word[i+1])) {
+                        phonemes.push('s');
+                    } else if (char === 'g' && 'eiy'.includes(word[i+1])) {
+                        phonemes.push('dʒ');
+                    } else if (charMap[char]) {
+                        phonemes.push(...this.parseIPAString(charMap[char]));
+                    }
+                    
+                    i++;
+                }
+                
+                return phonemes.length > 0 ? phonemes : ['ə'];
+            },
+
+            // German G2P
+            german(text) {
+                const phonemes = [];
+                const lower = text.toLowerCase();
+                
+                for (let i = 0; i < lower.length; i++) {
+                    const char = lower[i];
+                    const next = lower[i+1] || '';
+                    const digraph = char + next;
+                    
+                    // Digraphs
+                    if (digraph === 'sch') {
+                        phonemes.push('ʃ');
+                        i += 2;
+                    } else if (digraph === 'ch') {
+                        // Post-back-vowel check
+                        const prev = phonemes[phonemes.length - 1];
+                        if (['a', 'o', 'u', 'ɑ', 'ɔ'].includes(prev)) {
+                            phonemes.push('x');
+                        } else {
+                            phonemes.push('ç');
+                        }
+                        i++;
+                    } else if (digraph === 'ei') {
+                        phonemes.push('aɪ');
+                        i++;
+                    } else if (digraph === 'ie') {
+                        phonemes.push('i');
+                        i++;
+                    } else if (digraph === 'eu' || digraph === 'äu') {
+                        phonemes.push('ɔɪ');
+                        i++;
+                    } else if (digraph === 'au') {
+                        phonemes.push('aʊ');
+                        i++;
+                    } else if (digraph === 'ts') {
+                        phonemes.push('ts');
+                        i++;
+                    } else if (digraph === 'ph') {
+                        phonemes.push('f');
+                        i++;
+                    } else if (digraph === 'th') {
+                        phonemes.push('t');
+                        i++;
+                    } else if (digraph === 'ng') {
+                        phonemes.push('ŋ');
+                        i++;
+                    } else if (digraph === 'ck') {
+                        phonemes.push('k');
+                        i++;
+                    } else {
+                        // Single characters
+                        const map = {
+                            'a': 'a', 'ä': 'ɛ', 'b': 'b', 'c': 'ts', 'd': 'd',
+                            'e': 'e', 'f': 'f', 'g': 'g', 'h': 'h', 'i': 'ɪ',
+                            'j': 'j', 'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n',
+                            'o': 'o', 'ö': 'ø', 'p': 'p', 'q': 'k', 'r': 'ʀ',
+                            's': 'z', 'ß': 's', 't': 't', 'u': 'u', 'ü': 'y',
+                            'v': 'f', 'w': 'v', 'x': 'ks', 'y': 'y', 'z': 'ts'
+                        };
+                        if (map[char]) phonemes.push(map[char]);
+                    }
+                }
+                
+                // Final devoicing
+                const finalMap = { 'b': 'p', 'd': 't', 'g': 'k', 'v': 'f', 'z': 's' };
+                for (let i = 0; i < phonemes.length; i++) {
+                    if (finalMap[phonemes[i]] && 
+                        (i === phonemes.length - 1 || /[ .,!?;]/.test(text[i+1]))) {
+                        phonemes[i] = finalMap[phonemes[i]];
+                    }
+                }
+                
+                return phonemes;
+            },
+
+            // Spanish G2P
+            spanish(text) {
+                const phonemes = [];
+                const lower = text.toLowerCase();
+                
+                for (let i = 0; i < lower.length; i++) {
+                    const char = lower[i];
+                    const next = lower[i+1] || '';
+                    const digraph = char + next;
+                    
+                    if (digraph === 'll') {
+                        phonemes.push('j');
+                        i++;
+                    } else if (digraph === 'rr') {
+                        phonemes.push('r');
+                        i++;
+                    } else if (digraph === 'ch') {
+                        phonemes.push('tʃ');
+                        i++;
+                    } else if (digraph === 'qu') {
+                        phonemes.push('k');
+                        i++;
+                    } else if (digraph === 'gu' && 'ei'.includes(lower[i+2])) {
+                        phonemes.push('g');
+                        i++;
+                    } else if (digraph === 'ny') {
+                        phonemes.push('ɲ');
+                        i++;
+                    } else {
+                        const map = {
+                            'a': 'a', 'b': 'b', 'c': 'k', 'd': 'd', 'e': 'e',
+                            'f': 'f', 'g': 'g', 'h': '', 'i': 'i', 'j': 'x',
+                            'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'ñ': 'ɲ',
+                            'o': 'o', 'p': 'p', 'q': 'k', 'r': 'ɾ', 's': 's',
+                            't': 't', 'u': 'u', 'v': 'b', 'w': 'w', 'x': 'ks',
+                            'y': 'j', 'z': 's', 'á': 'a', 'é': 'e', 'í': 'i',
+                            'ó': 'o', 'ú': 'u', 'ü': 'u'
+                        };
+                        
+                        // c before e/i
+                        if (char === 'c' && 'eiéí'.includes(next)) {
+                            phonemes.push('s');
+                        } else if (char === 'g' && 'eiéí'.includes(next)) {
+                            phonemes.push('x');
+                        } else if (map[char]) {
+                            if (map[char]) phonemes.push(map[char]);
+                        }
+                    }
+                }
+                
+                return phonemes.filter(p => p !== '');
+            },
+
+            // French G2P
+            french(text) {
+                const phonemes = [];
+                const lower = text.toLowerCase();
+                
+                for (let i = 0; i < lower.length; i++) {
+                    const char = lower[i];
+                    const next = lower[i+1] || '';
+                    const digraph = char + next;
+                    const trigraph = lower.substring(i, i+3);
+                    
+                    if (trigraph === 'tion') {
+                        phonemes.push('s', 'j', 'ɔ̃');
+                        i += 3;
+                    } else if (digraph === 'an' || digraph === 'en') {
+                        phonemes.push('ɑ̃');
+                        i++;
+                    } else if (digraph === 'on') {
+                        phonemes.push('ɔ̃');
+                        i++;
+                    } else if (digraph === 'in' || digraph === 'ain') {
+                        phonemes.push('ɛ̃');
+                        i++;
+                    } else if (digraph === 'ou') {
+                        phonemes.push('u');
+                        i++;
+                    } else if (digraph === 'eu') {
+                        phonemes.push('ø');
+                        i++;
+                    } else if (digraph === 'au' || digraph === 'eau') {
+                        phonemes.push('o');
+                        i += (digraph === 'eau' ? 2 : 1);
+                    } else if (digraph === 'ch') {
+                        phonemes.push('ʃ');
+                        i++;
+                    } else if (digraph === 'gn') {
+                        phonemes.push('ɲ');
+                        i++;
+                    } else if (digraph === 'ph') {
+                        phonemes.push('f');
+                        i++;
+                    } else if (digraph === 'th') {
+                        phonemes.push('t');
+                        i++;
+                    } else if (digraph === 'qu') {
+                        phonemes.push('k');
+                        i++;
+                    } else if (digraph === 'gu' && 'ei'.includes(lower[i+2])) {
+                        phonemes.push('g');
+                        i++;
+                    } else {
+                        const map = {
+                            'a': 'a', 'à': 'a', 'â': 'a', 'b': 'b', 'c': 'k',
+                            'ç': 's', 'd': 'd', 'e': 'ə', 'é': 'e', 'è': 'ɛ',
+                            'ê': 'ɛ', 'f': 'f', 'g': 'g', 'h': '', 'i': 'i',
+                            'î': 'i', 'ï': 'i', 'j': 'ʒ', 'k': 'k', 'l': 'l',
+                            'm': 'm', 'n':

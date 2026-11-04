@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webster - Formant Speech Synthesizer</title>
+    <style>
+        :root {
+            --bg-base: #0f1115;
+            --bg-panel: #1a1d24;
+            --bg-input: #232730;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --border: #334155;
+            --radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--bg-panel);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--accent);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 2rem;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            width: 350px;
+            background-color: var(--bg-panel);
+            border-left: 1px solid var(--border);
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input[type="range"], button {
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 10px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        select:focus, textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .slider-row input[type="range"] {
+            flex: 1;
+            padding: 0;
+            height: 6px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border: none;
+        }
+        
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        .slider-val {
+            width: 45px;
+            text-align: right;
+            font-size: 0.9rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .toggle-btn {
+            background-color: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 8px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active {
+            background-color: rgba(59, 130, 246, 0.2);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button.primary {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+        }
+
+        button.primary:hover { background-color: var(--accent-hover); }
+
+        button.danger {
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button.danger:hover { background-color: var(--danger-hover); }
+
+        button.secondary {
+            cursor: pointer;
+        }
+        button.secondary:hover { background-color: var(--border); }
+
+        textarea {
+            flex: 1;
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            font-size: 1.1rem;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .visualizer-container {
+            height: 120px;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .debug-panel {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            flex: 1;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #a7f3d0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .hidden { display: none !important; }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .progress-container {
+            height: 6px;
+            background-color: var(--bg-input);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--accent);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <svg viewBox="0 0 24 24"><path d="M3 12h2l2-6 2 12 2-12 2 12 2-12 2 12 2-6h2" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Webster
+    </div>
+    <div class="header-controls">
+        <button class="secondary" id="btn-help" style="padding: 6px 12px; font-size: 0.9rem;">? Help</button>
+        <label for="lang-select">Input Language:</label>
+        <select id="lang-select">
+            <option value="auto">Auto-Detect</option>
+            <option value="en">English</option>
+            <option value="de">German</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="it">Italian</option>
+            <option value="el">Greek</option>
+            <option value="ru">Russian</option>
+            <option value="bg">Bulgarian</option>
+            <option value="uk">Ukrainian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+        </select>
+    </div>
+</header>
+
+<main>
+    <div class="left-panel">
+        <div class="toolbar">
+            <button class="primary" id="btn-play">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play
+            </button>
+            <button class="danger hidden" id="btn-stop">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg> Stop
+            </button>
+            <button class="secondary hidden" id="btn-pause">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause
+            </button>
+            <button class="secondary hidden" id="btn-resume">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Resume
+            </button>
+            <button class="secondary" id="btn-read-sel">Read Selection</button>
+            <button class="secondary" onclick="document.getElementById('file-upload').click()">Load File...</button>
+            <button class="secondary" id="btn-symbol-mode" title="Toggle: symbols as pauses or spoken names">Sym: Pause</button>
+            <button class="secondary" id="btn-export">Export WAV</button>
+            <input type="file" id="file-upload" accept=".txt,.md,.html,.srt">
+        </div>
+        
+        <textarea id="text-input" placeholder="Enter text here... To coarticulate clearly, type properly formatted sentences.">Hello world! This is a formant speech synthesizer running entirely in your browser using the Web Audio API. It models the human vocal tract to generate speech from scratch.</textarea>
+        
+        <div class="progress-container hidden" id="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+
+        <div class="status-bar">
+            <span id="char-count">164 characters</span>
+            <span id="status-msg">Ready</span>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="control-group">
+            <label>Voice Mode</label>
+            <div style="display:flex;gap:10px;">
+                <button class="toggle-btn active" id="btn-classic" style="flex:1;">Classic</button>
+                <button class="toggle-btn" id="btn-natural" style="flex:1;">Natural</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Voice Preset</label>
+            <select id="voice-preset">
+                <option value="narrator">Narrator (Default)</option>
+                <option value="female">Female</option>
+                <option value="child">Child</option>
+                <option value="elder">Elder</option>
+                <option value="robot">Robot</option>
+                <option value="whisper">Whisper</option>
+                <option value="hal">HAL 9000</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Pitch (Hz)</label>
+            <div class="slider-row">
+                <input type="range" id="pitch-slider" min="60" max="300" value="115">
+                <span class="slider-val" id="pitch-val">115</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Speech Rate</label>
+            <div class="slider-row">
+                <input type="range" id="rate-slider" min="0.5" max="2.5" step="0.1" value="1.0">
+                <span class="slider-val" id="rate-val">1.0x</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Formant Scale</label>
+            <div class="slider-row">
+                <input type="range" id="formant-slider" min="0.7" max="1.5" step="0.01" value="1.0">
+                <span class="slider-val" id="formant-val">1.00</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Brightness</label>
+            <div class="slider-row">
+                <input type="range" id="brightness-slider" min="0.5" max="2.0" step="0.05" value="1.0">
+                <span class="slider-val" id="brightness-val">1.00</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Roughness (Vocal Fry)</label>
+            <div class="slider-row">
+                <input type="range" id="roughness-slider" min="0" max="1" step="0.05" value="0">
+                <span class="slider-val" id="roughness-val">0.00</span>
+            </div>
+        </div>
+
+        <div class="control-group" style="flex: 1; display: flex;">
+            <label style="display: flex; justify-content: space-between; align-items: center;">
+                Phoneme Debug 
+                <button class="secondary" id="btn-toggle-debug" style="padding: 2px 8px; font-size: 0.75rem;">Hide</button>
+            </label>
+            <div class="debug-panel" id="debug-panel">Waiting for synthesis...</div>
+        </div>
+    </div>
+</main>
+
+<div id="help-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:2rem;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;">
+    <button onclick="document.getElementById('help-modal').classList.add('hidden')" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;">✕</button>
+    <h2 style="margin-bottom:1rem;color:var(--accent);">Webster — Formant Speech Synthesizer</h2>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Webster synthesizes speech from scratch using the Web Audio API. No browser TTS. No internet. No server. It models the human vocal tract using formant filters — just like early speech synthesizers of the 1970s–80s.</p>
+    
+    <h3 style="margin-bottom:0.5rem;">How to Use</h3>
+    <p style="color:var(--text-muted);margin-bottom:1rem;">Type or paste text into the input area and press <strong>Play</strong>. Use <strong>Read Selection</strong> to synthesize only highlighted text. Load .txt, .md, .html, or .srt files with <strong>Load File</strong>.</p>
+
+    <h3 style="margin-bottom:0.5rem;">Languages Supported</h3>
+    <p style="color:var(--text-muted);margin-bottom:1rem;">English, German, Spanish, French, Italian, Modern Greek, Russian, Bulgarian, Ukrainian, Japanese (Hiragana/Katakana), Korean (Hangul). Auto-detect works for most scripts. Numbers are automatically spoken in the selected language.</p>
+
+    <h3 style="margin-bottom:0.5rem;">Voice Controls</h3>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;"><strong>Preset</strong> — loads a named voice profile. Choose Custom to mix your own.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;"><strong>Pitch</strong> — fundamental frequency of the voice (Hz). Higher = lighter voice.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;"><strong>Rate</strong> — speech speed multiplier. 1.0x is normal.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;"><strong>Formant Scale</strong> — scales resonant frequencies of the vocal tract. Higher = smaller perceived mouth/throat.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;"><strong>Brightness</strong> — scales fricative filter frequencies. Higher = sharper sibilants.</p>
+    <p style="color:var(--text-muted);margin-bottom:1rem;"><strong>Roughness</strong> — adds vocal fry character by reducing clean voicing. Simulates an older or rougher voice.</p>
+
+    <h3 style="margin-bottom:0.5rem;">Tips</h3>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• "The" automatically pronounces as "thee" before vowels and "thuh" before consonants based on context.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• Punctuation matters: commas pause briefly, periods pause longer.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• Japanese and Korean sound the most natural due to their regular phonemic structure.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• The Phoneme Debug panel shows exactly what sounds are being synthesized.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• HAL 9000 preset + slow rate + long text is the correct use of this tool.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• Webster is entirely offline. Nothing leaves your browser.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• Export WAV downloads the synthesized audio as a standard .wav file for use anywhere.</p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">• Questions get rising intonation, exclamations get a falling-then-level contour, statements get a natural fall at the end.</p>
+    <p style="color:var(--text-muted);margin-bottom:1rem;">• Built with the Web Audio API. One HTML file. No dependencies.</p>
+
+    <h3 style="margin-bottom:0.5rem;">API Usage</h3>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">Webster exposes a JavaScript API. From the same page: <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;">window.webster.speak("Hello world", {preset:"hal", rate:0.8})</code></p>
+    <p style="color:var(--text-muted);margin-bottom:0.5rem;">From an iframe parent: send <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;">postMessage({target:"webster", action:"speak", text:"Hello", options:{lang:"ja"}}, "*")</code> or use standard commands like `play`, `stop`, `pause`, `resume`.</p>
+    <p style="color:var(--text-muted);">Options: <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px;">lang, pitch, rate, preset, natural, symbolMode</code>. Actions: speak, play, stop, pause, resume, exportWAV, getPresets.</p>
+  </div>
+</div>
+
+<script>
+const VOICE_PRESETS = {
+    'narrator': { name:'Narrator', pitch:115, rate:0.9, formantScale:1.0, brightness:1.0, roughness:0.0 },
+    'female':   { name:'Female',   pitch:185, rate:1.0, formantScale:1.18, brightness:1.05, roughness:0.0 },
+    'child':    { name:'Child',    pitch:240, rate:1.1, formantScale:1.3, brightness:1.1, roughness:0.0 },
+    'elder':    { name:'Elder',    pitch:95,  rate:0.85, formantScale:0.95, brightness:0.9, roughness:0.15 },
+    'robot':    { name:'Robot',    pitch:100, rate:1.0, formantScale:1.0, brightness:1.3, roughness:0.4 },
+    'whisper':  { name:'Whisper',  pitch:90,  rate:0.8, formantScale:1.0, brightness:0.7, roughness:0.0 },
+    'hal':      { name:'HAL 9000', pitch:88,  rate:0.75, formantScale:0.92, brightness:0.85, roughness:0.05 },
+};
+
+/**
+ * PHONEME DEFINITIONS (IPA)
+ * Source-filter parameters: F1, F2, F3 in Hz.
+ */
+const PHONEMES = {
+    'a': { f1: 800, f2: 1200, f3: 2500, type: 'vowel', dur: 105, amp: 1.0 },
+    'æ': { f1: 700, f2: 1800, f3: 2600, type: 'vowel', dur: 105, amp: 1.0 },
+    'e': { f1: 600, f2: 2000, f3: 2800, type: 'vowel', dur: 105, amp: 0.9 },
+    'i': { f1: 300, f2: 2600, f3: 3200, type: 'vowel', dur: 95, amp: 0.8 },
+    'ɪ': { f1: 400, f2: 2000, f3: 2600, type: 'vowel', dur: 85, amp: 0.8 },
+    'o': { f1: 500, f2: 900,  f3: 2500, type: 'vowel', dur: 105, amp: 0.9 },
+    'ɔ': { f1: 600, f2: 800,  f3: 2500, type: 'vowel', dur: 105, amp: 1.0 },
+    'u': { f1: 300, f2: 800,  f3: 2300, type: 'vowel', dur: 95, amp: 0.8 },
+    'ʊ': { f1: 400, f2: 1000, f3: 2300, type: 'vowel', dur: 85, amp: 0.8 },
+    'ʌ': { f1: 700, f2: 1200, f3: 2500, type: 'vowel', dur: 95, amp: 0.9 },
+    'ə': { f1: 500, f2: 1500, f3: 2500, type: 'vowel', dur: 75, amp: 0.7 },
+    'ɛ': { f1: 580, f2: 1800, f3: 2600, type: 'vowel', dur: 95, amp: 0.9 },
+    'ɑ̃':{ f1: 700, f2: 1100, f3: 2500, type: 'nasal_vowel', dur: 115, amp: 0.8 },
+    'ɔ̃':{ f1: 500, f2: 800,  f3: 2500, type: 'nasal_vowel', dur: 115, amp: 0.8 },
+    'ɛ̃':{ f1: 550, f2: 1700, f3: 2600, type: 'nasal_vowel', dur: 115, amp: 0.8 },
+    'ø': { f1: 400, f2: 1500, f3: 2400, type: 'vowel', dur: 95, amp: 0.8 },
+    'y': { f1: 300, f2: 1800, f3: 2300, type: 'vowel', dur: 95, amp: 0.8 },
+    'ɨ': { f1: 350, f2: 1400, f3: 2400, type: 'vowel', dur: 95, amp: 0.8 },
+    'w': { f1: 300, f2: 700,  f3: 2300, type: 'approximant', dur: 75, amp: 0.6 },
+    'j': { f1: 300, f2: 2400, f3: 3000, type: 'approximant', dur: 75, amp: 0.6 },
+    'l': { f1: 350, f2: 1200, f3: 2800, type: 'approximant', dur: 75, amp: 0.6 },
+    'r': { f1: 450, f2: 1200, f3: 1600, type: 'approximant', dur: 75, amp: 0.6 },
+    'ʎ': { f1: 350, f2: 2000, f3: 2800, type: 'approximant', dur: 75, amp: 0.6 },
+    'm': { f1: 250, f2: 1000, f3: 2000, type: 'nasal', dur: 90, amp: 0.4 },
+    'n': { f1: 250, f2: 1500, f3: 2500, type: 'nasal', dur: 90, amp: 0.4 },
+    'ŋ': { f1: 250, f2: 2000, f3: 2500, type: 'nasal', dur: 90, amp: 0.4 },
+    'ɲ': { f1: 250, f2: 2200, f3: 2800, type: 'nasal', dur: 90, amp: 0.4 },
+    's': { f1: 0, f2: 0, f3: 0, noiseFreq: 5000, type: 'fricative_unvoiced', dur: 100, amp: 0.4 },
+    'z': { f1: 250, f2: 1500, f3: 2500, noiseFreq: 5000, type: 'fricative_voiced', dur: 100, amp: 0.3 },
+    'ʃ': { f1: 0, f2: 0, f3: 0, noiseFreq: 2500, type: 'fricative_unvoiced', dur: 110, amp: 0.5 },
+    'ʒ': { f1: 250, f2: 1800, f3: 2500, noiseFreq: 2500, type: 'fricative_voiced', dur: 110, amp: 0.4 },
+    'f': { f1: 0, f2: 0, f3: 0, noiseFreq: 1500, type: 'fricative_unvoiced', dur: 90, amp: 0.3 },
+    'v': { f1: 250, f2: 1000, f3: 2000, noiseFreq: 1500, type: 'fricative_voiced', dur: 90, amp: 0.3 },
+    'θ': { f1: 0, f2: 0, f3: 0, noiseFreq: 1200, type: 'fricative_unvoiced', dur: 90, amp: 0.2 },
+    'ð': { f1: 250, f2: 1200, f3: 2000, noiseFreq: 1200, type: 'fricative_voiced', dur: 90, amp: 0.2 },
+    'h': { f1: 500, f2: 1500, f3: 2500, noiseFreq: 1000, type: 'fricative_unvoiced', dur: 80, amp: 0.2 },
+    'x': { f1: 0, f2: 0, f3: 0, noiseFreq: 2000, type: 'fricative_unvoiced', dur: 100, amp: 0.4 },
+    'p': { f1: 0, f2: 0, f3: 0, burstFreq: 1000, type: 'plosive_unvoiced', dur: 80, amp: 0.5 },
+    'b': { f1: 200, f2: 800, f3: 2000, burstFreq: 1000, type: 'plosive_voiced', dur: 80, amp: 0.4 },
+    't': { f1: 0, f2: 0, f3: 0, burstFreq: 4000, type: 'plosive_unvoiced', dur: 80, amp: 0.5 },
+    'd': { f1: 200, f2: 1500, f3: 2500, burstFreq: 4000, type: 'plosive_voiced', dur: 80, amp: 0.4 },
+    'k': { f1: 0, f2: 0, f3: 0, burstFreq: 2500, type: 'plosive_unvoiced', dur: 80, amp: 0.5 },
+    'g': { f1: 200, f2: 2000, f3: 2500, burstFreq: 2500, type: 'plosive_voiced', dur: 80, amp: 0.4 },
+    '_': { f1: 0, f2: 0, f3: 0, type: 'silence', dur: 85, amp: 0 },
+    ',': { f1: 0, f2: 0, f3: 0, type: 'silence', dur: 200, amp: 0 },
+    '.': { f1: 0, f2: 0, f3: 0, type: 'silence', dur: 350, amp: 0 }
+};
+
+const SymbolExpander = {
+    symbols: {
+        '@':  { en:'at sign', de:'At-Zeichen', es:'arroba', fr:'arobase', it:'chiocciola', ru:'собачка', el:'παπάκι', ja:'アットマーク', ko:'골뱅이' },
+        '#':  { en:'hash', de:'Raute', es:'almohadilla', fr:'dièse', it:'cancelletto', ru:'хэштег', el:'δίεση', ja:'シャープ', ko:'샵' },
+        '$':  { en:'dollar', de:'Dollar', es:'dólar', fr:'dollar', it:'dollaro', ru:'доллар', el:'δολάριο', ja:'ドル', ko:'달러' },
+        '€':  { en:'euro', de:'Euro', es:'euro', fr:'euro', it:'euro', ru:'евро', el:'ευρώ', ja:'ユーロ', ko:'유로' },
+        '£':  { en:'pound', de:'Pfund', es:'libra', fr:'livre sterling', it:'sterlina', ru:'фунт', el:'λίρα', ja:'ポンド', ko:'파운드' },
+        '%':  { en:'percent', de:'Prozent', es:'por ciento', fr:'pour cent', it:'percento', ru:'процент', el:'τοις εκατό', ja:'パーセント', ko:'퍼센트' },
+        '&':  { en:'and', de:'und', es:'y', fr:'et', it:'e', ru:'и', el:'και', ja:'アンド', ko:'앤드' },
+        '*':  { en:'asterisk', de:'Sternchen', es:'asterisco', fr:'astérisque', it:'asterisco', ru:'звёздочка', el:'αστερίσκος', ja:'アスタリスク', ko:'별표' },
+        '/':  { en:'slash', de:'Schrägstrich', es:'barra', fr:'barre oblique', it:'barra', ru:'слеш', el:'κάθετος', ja:'スラッシュ', ko:'슬래시' },
+        '\\': { en:'backslash', de:'Backslash', es:'barra invertida', fr:'barre oblique inverse', it:'barra rovescia', ru:'обратный слеш', el:'ανάστροφος', ja:'バックスラッシュ', ko:'역슬래시' },
+        '+':  { en:'plus', de:'plus', es:'más', fr:'plus', it:'più', ru:'плюс', el:'συν', ja:'プラス', ko:'플러스' },
+        '=':  { en:'equals', de:'gleich', es:'igual', fr:'égal', it:'uguale', ru:'равно', el:'ίσον', ja:'イコール', ko:'같다' },
+        '<':  { en:'less than', de:'kleiner als', es:'menor que', fr:'inférieur à', it:'minore di', ru:'меньше', el:'μικρότερο από', ja:'より小さい', ko:'보다 작은' },
+        '>':  { en:'greater than', de:'größer als', es:'mayor que', fr:'supérieur à', it:'maggiore di', ru:'больше', el:'μεγαλύτερο από', ja:'より大きい', ko:'보다 큰' },
+        '^':  { en:'caret', de:'Dach', es:'circunflejo', fr:'accent circonflexe', it:'accento circonflesso', ru:'каретка', el:'περισπωμένη', ja:'キャレット', ko:'캐럿' },
+        '~':  { en:'tilde', de:'Tilde', es:'tilde', fr:'tilde', it:'tilde', ru:'тильда', el:'περισπωμένη', ja:'チルダ', ko:'물결표' },
+        '|':  { en:'pipe', de:'Pipe', es:'barra vertical', fr:'barre verticale', it:'barra verticale', ru:'вертикальная черта', el:'κατακόρυφη γραμμή', ja:'パイプ', ko:'파이프' },
+        '_':  { en:'underscore', de:'Unterstrich', es:'guión bajo', fr:'tiret bas', it:'trattino basso', ru:'нижнее подчёркивание', el:'κάτω παύλα', ja:'アンダースコア', ko:'밑줄' },
+        '…':  { en:'ellipsis', de:'Auslassungspunkte', es:'puntos suspensivos', fr:'points de suspension', it:'puntini di sospensione', ru:'многоточие', el:'αποσιωπητικά', ja:'省略記号', ko:'줄임표' },
+        '—':  { en:'dash', de:'Gedankenstrich', es:'raya', fr:'tiret', it:'lineetta', ru:'тире', el:'παύλα', ja:'ダッシュ', ko:'대시' }
+    },
+    expand(text, lang, mode = 'pause') {
+        if (mode === 'pause') {
+            return text.replace(/\.\.\./g, ',').replace(/—/g, ',').replace(/[_|^~\\[\](){}'"<>=+*&%$€£#@]/g, ' ');
+        } else {
+            return text.replace(/[.]{3}|[—@#$€£%&*/\\+\-=<>^~|_()\[\]'"]/g, (sym) => {
+                const entry = this.symbols[sym === '...' ? '…' : sym];
+                if (!entry) return ' ';
+                return ' ' + (entry[lang] || entry.en) + ' ';
+            });
+        }
+    }
+};
+
+const NumberExpander = {
+    expand(text, lang) {
+        return text.replace(/\d+(\.\d+)?/g, (match) => {
+            const isDecimal = match.includes('.');
+            if (isDecimal) {
+                const [intPart, fracPart] = match.split('.');
+                return this.toWords(parseInt(intPart), lang) + ' ' + this.decimalSep(lang) + ' ' + fracPart.split('').map(d => this.toWords(parseInt(d), lang)).join(' ');
+            }
+            return this.toWords(parseInt(match), lang);
+        });
+    },
+    decimalSep(lang) {
+        const seps = { en:'point', de:'Komma', fr:'virgule', es:'coma', it:'virgola', ru:'целых', ja:'てん', ko:'점', el:'κόμμα', bg:'цяло', uk:'ціла' };
+        return seps[lang] || 'point';
+    },
+    toWords(n, lang) {
+        if (n < 0) return 'negative ' + this.toWords(-n, lang);
+        if (n === 0) return 'zero';
+        return this.english(n);
+    },
+    english(n) {
+        const ones = ['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+        const tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+        if (n < 20) return ones[n];
+        if (n < 100) return tens[Math.floor(n/10)] + (n%10 ? '-' + ones[n%10] : '');
+        if (n < 1000) return ones[Math.floor(n/100)] + ' hundred' + (n%100 ? ' ' + this.english(n%100) : '');
+        if (n < 1000000) return this.english(Math.floor(n/1000)) + ' thousand' + (n%1000 ? ' ' + this.english(n%1000) : '');
+        if (n < 1000000000) return this.english(Math.floor(n/1000000)) + ' million' + (n%1000000 ? ' ' + this.english(n%1000000) : '');
+        return this.english(Math.floor(n/1000000000)) + ' billion' + (n%1000000000 ? ' ' + this.english(n%1000000000) : '');
+    }
+};
+
+const ENG_DICT = {
+    "the":"ð ə", "of":"ʌ v", "to":"t u", "and":"æ n d", "a":"ə", "in":"ɪ n", "is":"ɪ z", "it":"ɪ t", "you":"j u", "that":"ð æ t", 
+    "he":"h i", "was":"w ʌ z", "for":"f ɔ r", "on":"a n", "are":"a r", "with":"w ɪ ð", "as":"æ z", "i":"a ɪ", "his":"h ɪ z", 
+    "they":"ð e ɪ", "be":"b i", "at":"æ t", "one":"w ʌ n", "have":"h æ v", "this":"ð ɪ s", "from":"f r ʌ m", "or":"ɔ r", 
+    "had":"h æ d", "by":"b a ɪ", "hot":"h a t", "word":"w ə r d", "but":"b ʌ t", "what":"w ʌ t", "some":"s ʌ m", "we":"w i", 
+    "can":"k æ n", "out":"a ʊ t", "other":"ʌ ð ə r", "were":"w ə r", "all":"ɔ l", "there":"ð ɛ r", "when":"w ɛ n", "up":"ʌ p", 
+    "use":"j u z", "your":"j ɔ r", "how":"h a ʊ", "said":"s ɛ d", "an":"æ n", "each":"i t ʃ", "she":"ʃ i", "which":"w ɪ t ʃ", 
+    "do":"d u", "their":"ð ɛ r", "time":"t a ɪ m", "if":"ɪ f", "will":"w ɪ l", "way":"w e ɪ", "about":"ə b a ʊ t", "many":"m ɛ n i", 
+    "then":"ð ɛ n", "them":"ð ɛ m", "write":"r a ɪ t", "would":"w ʊ d", "like":"l a ɪ k", "so":"s o", "these":"ð i z", "her":"h ə r", 
+    "long":"l ɔ ŋ", "make":"m e ɪ k", "thing":"θ ɪ ŋ", "see":"s i", "him":"h ɪ m", "two":"t u", "has":"h æ z", "look":"l ʊ k", 
+    "more":"m ɔ r", "day":"d e ɪ", "could":"k ʊ d", "go":"g o", "come":"k ʌ m", "did":"d ɪ d", "number":"n ʌ m b ə r", "sound":"s a ʊ n d", 
+    "no":"n o", "most":"m o s t", "people":"p i p ə l", "my":"m a ɪ", "over":"o v ə r", "know":"n o", "water":"w ɔ t ə r", "than":"ð æ n", 
+    "call":"k ɔ l", "first":"f ə r s t", "who":"h u", "may":"m e ɪ", "down":"d a ʊ n", "side":"s a ɪ d", "been":"b ɪ n", "now":"n a ʊ", 
+    "find":"f a ɪ n d", "any":"ɛ n i", "new":"n u", "work":"w ə r k", "part":"p a r t", "take":"t e ɪ k", "get":"g ɛ t", "place":"p l e ɪ s", 
+    "made":"m e ɪ d", "live":"l ɪ v", "where":"w ɛ r", "after":"æ f t ə r", "back":"b æ k", "little":"l ɪ t ə l", "only":"o n l i", 
+    "round":"r a ʊ n d", "man":"m æ n", "year":"j i r", "came":"k e ɪ m", "show":"ʃ o", "every":"ɛ v r i", "good":"g ʊ d", "me":"m i", 
+    "give":"g ɪ v", "our":"a ʊ r", "under":"ʌ n d ə r", "name":"n e ɪ m", "very":"v ɛ r i", "through":"θ r u", "just":"d ʒ ʌ s t", 
+    "form":"f ɔ r m", "sentence":"s ɛ n t ə n s", "great":"g r e ɪ t", "think":"θ ɪ ŋ k", "say":"s e ɪ", "help":"h ɛ l p", "low":"l o", 
+    "line":"l a ɪ n", "differ":"d ɪ f ə r", "turn":"t ə r n", "cause":"k ɔ z", "much":"m ʌ t ʃ", "mean":"m i n", "before":"b ɪ f ɔ r", 
+    "move":"m u v", "right":"r a ɪ t", "boy":"b ɔ ɪ", "old":"o l d", "too":"t u", "same":"s e ɪ m", "tell":"t ɛ l", "does":"d ʌ z", 
+    "set":"s ɛ t", "three":"θ r i", "want":"w a n t", "air":"ɛ r", "well":"w ɛ l", "also":"ɔ l s o", "play":"p l e ɪ", "small":"s m ɔ l", 
+    "end":"ɛ n d", "put":"p ʊ t", "home":"h o m", "read":"r i d", "hand":"h æ n d", "port":"p ɔ r t", "large":"l a r d ʒ", "spell":"s p ɛ l", 
+    "add":"æ d", "even":"i v ə n", "land":"l æ n d", "here":"h i r", "must":"m ʌ s t", "big":"b ɪ g", "high":"h a ɪ", "such":"s ʌ t ʃ", 
+    "follow":"f a l o", "act":"æ k t", "why":"w a ɪ", "ask":"æ s k", "men":"m ɛ n", "change":"t ʃ e ɪ n d ʒ", "went":"w ɛ n t", "light":"l a ɪ t", 
+    "kind":"k a ɪ n d", "off":"ɔ f", "need":"n i d", "house":"h a ʊ s", "picture":"p ɪ k t ʃ ə r", "try":"t r a ɪ", "us":"ʌ s", "again":"ə g ɛ n", 
+    "animal":"æ n ɪ m ə l", "point":"p ɔ ɪ n t", "mother":"m ʌ ð ə r", "world":"w ə r l d", "near":"n i r", "build":"b ɪ l d", "self":"s ɛ l f",
+    "hello":"h ɛ l o", "browser":"b r a ʊ z ə r"
+};
+
+// Lightweight WAV Encoder for Exporting without External Dependencies
+function audioBufferToWav(buffer) {
+    const numOfChan = buffer.numberOfChannels;
+    const length = buffer.length * numOfChan * 2 + 44;
+    const bufferArr = new ArrayBuffer(length);
+    const view = new DataView(bufferArr);
+    const channels = [];
+    const sampleRate = buffer.sampleRate;
+    let offset = 0, pos = 0;
+    function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+    setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+    setUint32(0x20746d66); setUint32(16); setUint16(1);
+    setUint16(numOfChan); setUint32(sampleRate); setUint32(sampleRate * 2 * numOfChan);
+    setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164);
+    setUint32(length - pos - 4);
+    for(let i = 0; i < buffer.numberOfChannels; i++) channels.push(buffer.getChannelData(i));
+    while(offset < buffer.length) {
+        for(let i = 0; i < numOfChan; i++) {
+            let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+            view.setInt16(pos, sample, true); pos += 2;
+        }
+        offset++;
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+class Synthesizer {
+    constructor() {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.audioCtx.createGain();
+        this.masterGain.connect(this.audioCtx.destination);
+        this.isPlaying = false;
+        this.natural = false;
+        this.symbolMode = 'pause';
+        this.activeNodes = [];
+    }
+
+    async playSequence(phonemes, ctx = this.audioCtx, dest = this.masterGain, options = {}) {
+        this.isPlaying = true;
+        let t = ctx.currentTime + 0.1;
+        const preset = document.getElementById('voice-preset').value || 'narrator';
+        const p = VOICE_PRESETS[preset] || VOICE_PRESETS['narrator'];
+        const pitch = parseFloat(document.getElementById('pitch-slider').value) || p.pitch;
+        const rate = parseFloat(document.getElementById('rate-slider').value) || p.rate;
+        const formantScale = parseFloat(document.getElementById('formant-slider').value) || p.formantScale;
+        const brightness = parseFloat(document.getElementById('brightness-slider').value) || p.brightness;
+        const roughness = parseFloat(document.getElementById('roughness-slider').value) || p.roughness;
+
+        for (let i = 0; i < phonemes.length; i++) {
+            if (!this.isPlaying && ctx === this.audioCtx) break;
+            const phoneStr = phonemes[i];
+            const phone = PHONEMES[phoneStr];
+            if (!phone) continue;
+            
+            const dur = (phone.dur / 1000) / rate;
+            
+            if (phone.type === 'silence') {
+                t += dur;
+                continue;
+            }
+
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            
+            // Intonation contour simple logic
+            let finalPitch = pitch;
+            if (options.natural) {
+                if (i === phonemes.length - 2 && phonemes[i+1] === '?') finalPitch *= 1.4;
+                else if (i === phonemes.length - 2 && phonemes[i+1] === '.') finalPitch *= 0.8;
+                else finalPitch += (Math.random() * 5 - 2); 
+            }
+            
+            osc.frequency.setValueAtTime(finalPitch, t);
+            
+            // Vocal fry simulation
+            if (roughness > 0) {
+                const lfo = ctx.createOscillator();
+                lfo.type = 'square';
+                lfo.frequency.value = finalPitch / 2;
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.value = finalPitch * roughness;
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc.frequency);
+                lfo.start(t); lfo.stop(t + dur);
+                if (ctx === this.audioCtx) this.activeNodes.push(lfo);
+            }
+
+            const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = phone.f1 * formantScale; f1.Q.value = 10;
+            const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = phone.f2 * formantScale; f2.Q.value = 10;
+            const f3 = ctx.createBiquadFilter(); f3.type = 'bandpass'; f3.frequency.value = phone.f3 * formantScale; f3.Q.value = 10;
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(phone.amp, t + dur * 0.1);
+            gain.gain.setValueAtTime(phone.amp, t + dur * 0.9);
+            gain.gain.linearRampToValueAtTime(0, t + dur);
+
+            osc.connect(f1); osc.connect(f2); osc.connect(f3);
+            f1.connect(gain); f2.connect(gain); f3.connect(gain);
+            gain.connect(dest);
+
+            osc.start(t);
+            osc.stop(t + dur);
+            if (ctx === this.audioCtx) this.activeNodes.push(osc);
+
+            if (phone.noiseFreq) {
+                const bufferSize = Math.max(1, ctx.sampleRate * dur);
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let j = 0; j < bufferSize; j++) data[j] = Math.random() * 2 - 1;
+                
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseFilter = ctx.createBiquadFilter();
+                noiseFilter.type = 'bandpass';
+                noiseFilter.frequency.value = phone.noiseFreq * brightness;
+                
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0, t);
+                noiseGain.gain.linearRampToValueAtTime(phone.amp * 0.6, t + dur * 0.1);
+                noiseGain.gain.linearRampToValueAtTime(0, t + dur);
+
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(dest);
+                noise.start(t);
+                if (ctx === this.audioCtx) this.activeNodes.push(noise);
+            }
+            t += dur;
+        }
+
+        if (options.onComplete && ctx === this.audioCtx) {
+            setTimeout(options.onComplete, (t - ctx.currentTime) * 1000);
+        }
+        return t; // return total duration for offline rendering
+    }
+
+    stop() {
+        this.isPlaying = false;
+        this.activeNodes.forEach(n => { try { n.stop(); } catch(e){} });
+        this.activeNodes = [];
+    }
+    
+    pause() { this.audioCtx.suspend(); }
+    resumePlay() { this.audioCtx.resume(); }
+
+    async renderToWAV(text, lang, options = {}) {
+        const phonemes = app.processText(text, lang || 'en');
+        // Pre-calculate duration assuming rate=1.0 as baseline to size the offline context
+        let estDur = 0;
+        phonemes.forEach(p => estDur += (PHONEMES[p] ? PHONEMES[p].dur/1000 : 0));
+        const rate = parseFloat(document.getElementById('rate-slider').value) || 1.0;
+        estDur = (estDur / rate) + 1.0; // add buffer
+
+        const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100 * estDur, 44100);
+        this.playSequence(phonemes, offlineCtx, offlineCtx.destination, options);
+        
+        const renderedBuffer = await offlineCtx.startRendering();
+        const blob = audioBufferToWav(renderedBuffer);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'webster_speech.wav';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
+    }
+}
+
+const app = {
+    synth: null,
+    currentLang: 'en',
+    
+    init() {
+        this.synth = new Synthesizer();
+        this.bindUI();
+        this.setupVisualizer();
+    },
+
+    detectLanguage(text) { return 'en'; },
+
+    processText(text, lang) {
+        let expanded = NumberExpander.expand(text, lang);
+        expanded = SymbolExpander.expand(expanded, lang, this.synth ? this.synth.symbolMode : 'pause');
+        
+        const words = expanded.toLowerCase().replace(/[^a-z0-9 .,?_]/g, '').split(/(\s+|[,.?])/);
+        let phonemes = [];
+        
+        for (const w of words) {
+            const trimW = w.trim();
+            if (!trimW) continue;
+            if (['.', ',', '?'].includes(trimW)) { phonemes.push(trimW); continue; }
+            if (ENG_DICT[trimW]) {
+                phonemes.push(...ENG_DICT[trimW].split(' '));
+            } else {
+                for (const char of trimW) if (PHONEMES[char]) phonemes.push(char);
+            }
+            phonemes.push('_'); 
+        }
+        return phonemes;
+    },
+
+    play(overrideText, lang, options = {}) {
+        if (!this.synth) this.init();
+        const text = overrideText || document.getElementById('text-input').value;
+        this.currentLang = lang || document.getElementById('lang-select').value;
+        const phonemes = this.processText(text, this.currentLang === 'auto' ? 'en' : this.currentLang);
+        
+        document.getElementById('debug-panel').textContent = phonemes.join(' ');
+        document.getElementById('status-msg').textContent = 'Playing...';
+        
+        this.synth.playSequence(phonemes, this.synth.audioCtx, this.synth.masterGain, {
+            natural: options.natural !== undefined ? options.natural : this.synth.natural,
+            onComplete: () => { document.getElementById('status-msg').textContent = 'Ready'; }
+        });
+        
+        if(this.synth.audioCtx.state === 'suspended') this.synth.audioCtx.resume();
+        this.drawVisualizer();
+    },
+
+    stop() { if (this.synth) this.synth.stop(); document.getElementById('status-msg').textContent = 'Stopped'; },
+    pause() { if (this.synth) this.synth.pause(); document.getElementById('status-msg').textContent = 'Paused'; },
+    resumePlay() { if (this.synth) this.synth.resumePlay(); document.getElementById('status-msg').textContent = 'Playing...'; },
+    
+    setupVisualizer() {
+        this.analyser = this.synth.audioCtx.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.synth.masterGain.connect(this.analyser);
+        this.canvas = document.getElementById('visualizer');
+        this.ctx = this.canvas.getContext('2d');
+    },
+
+    drawVisualizer() {
+        if (!this.synth.isPlaying || !this.analyser) return;
+        requestAnimationFrame(() => this.drawVisualizer());
+        
+        const bufferLength = this.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        this.analyser.getByteTimeDomainData(dataArray);
+
+        this.ctx.fillStyle = '#0f1115';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#3b82f6';
+        this.ctx.beginPath();
+
+        const sliceWidth = this.canvas.width * 1.0 / bufferLength;
+        let x = 0;
+        for(let i = 0; i < bufferLength; i++) {
+            const v = dataArray[i] / 128.0;
+            const y = v * this.canvas.height / 2;
+            if(i === 0) this.ctx.moveTo(x, y);
+            else this.ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        this.ctx.lineTo(this.canvas.width, this.canvas.height / 2);
+        this.ctx.stroke();
+    },
+
+    bindUI() {
+        document.getElementById('btn-play').addEventListener('click', () => this.play());
+        document.getElementById('btn-stop').addEventListener('click', () => this.stop());
+        document.getElementById('btn-pause').addEventListener('click', () => this.pause());
+        document.getElementById('btn-resume').addEventListener('click', () => this.resumePlay());
+        document.getElementById('btn-export').addEventListener('click', () => {
+            if(!this.synth) this.init();
+            window.webster.exportWAV(document.getElementById('text-input').value, this.currentLang);
+        });
+
+        document.getElementById('voice-preset').addEventListener('change', (e) => {
+            const p = VOICE_PRESETS[e.target.value];
+            if(p) {
+                ['pitch','rate','formant','brightness','roughness'].forEach(s => {
+                    const key = s === 'formant' ? 'formantScale' : s;
+                    document.getElementById(`${s}-slider`).value = p[key];
+                    document.getElementById(`${s}-val`).textContent = p[key] + (s==='rate'?'x':'');
+                });
+            }
+        });
+
+        ['pitch', 'rate', 'formant', 'brightness', 'roughness'].forEach(s => {
+            document.getElementById(`${s}-slider`).addEventListener('input', (e) => {
+                document.getElementById(`${s}-val`).textContent = e.target.value + (s==='rate'?'x':'');
+                document.getElementById('voice-preset').value = 'custom';
+            });
+        });
+
+        document.getElementById('text-input').addEventListener('input', (e) => {
+            document.getElementById('char-count').textContent = e.target.value.length + ' characters';
+        });
+
+        document.getElementById('btn-natural').addEventListener('click', (e) => {
+            e.target.classList.add('active'); document.getElementById('btn-classic').classList.remove('active');
+            if(this.synth) this.synth.natural = true;
+        });
+
+        document.getElementById('btn-classic').addEventListener('click', (e) => {
+            e.target.classList.add('active'); document.getElementById('btn-natural').classList.remove('active');
+            if(this.synth) this.synth.natural = false;
+        });
+        
+        document.getElementById('btn-symbol-mode').addEventListener('click', (e) => {
+            if(this.synth) {
+                this.synth.symbolMode = this.synth.symbolMode === 'pause' ? 'speak' : 'pause';
+                e.target.textContent = 'Sym: ' + (this.synth.symbolMode === 'pause' ? 'Pause' : 'Speak');
+            }
+        });
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => app.init());
+
+// Unified Global API Architecture 
+window.webster = {
+    // Standard speak method ensuring UI reflects the API call accurately
+    speak(text, options = {}) {
+        if (!app.synth) app.init();
+        if (options.preset && VOICE_PRESETS[options.preset]) {
+            document.getElementById('voice-preset').value = options.preset;
+            const p = VOICE_PRESETS[options.preset];
+            ['pitch','rate','formant','brightness','roughness'].forEach(s => {
+                const key = s === 'formant' ? 'formantScale' : s;
+                document.getElementById(`${s}-slider`).value = p[key];
+                document.getElementById(`${s}-val`).textContent = p[key] + (s==='rate'?'x':'');
+            });
+        }
+        
+        if (options.pitch) { document.getElementById('pitch-slider').value = options.pitch; document.getElementById('pitch-val').textContent = options.pitch; }
+        if (options.rate) { document.getElementById('rate-slider').value = options.rate; document.getElementById('rate-val').textContent = options.rate + 'x'; }
+        if (options.formantScale) { document.getElementById('formant-slider').value = options.formantScale; document.getElementById('formant-val').textContent = options.formantScale; }
+        if (options.brightness) { document.getElementById('brightness-slider').value = options.brightness; document.getElementById('brightness-val').textContent = options.brightness; }
+        if (options.roughness) { document.getElementById('roughness-slider').value = options.roughness; document.getElementById('roughness-val').textContent = options.roughness; }
+        if (options.lang) document.getElementById('lang-select').value = options.lang;
+        
+        if (options.natural !== undefined) {
+            if (options.natural) document.getElementById('btn-natural').click();
+            else document.getElementById('btn-classic').click();
+        }
+        
+        document.getElementById('text-input').value = text;
+        app.play(text, options.lang || 'en', options);
+    },
+    
+    // Direct synthesis bypass for high performance integrations 
+    play(text, lang, options) {
+        if (!app.synth) app.init();
+        app.play(text, lang, options);
+    },
+    
+    exportWAV(text, lang, options) {
+        if (!app.synth) app.init();
+        return app.synth.renderToWAV(text, lang, options);
+    },
+
+    stop: () => app.stop(),
+    pause: () => app.pause(),
+    resume: () => app.resumePlay(),
+    getPresets: () => ({ ...VOICE_PRESETS })
+};
+
+// PostMessage integration handling both target commands natively 
+window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+    
+    if (data.target === 'webster' || data.command) {
+        const cmd = data.action || data.command;
+        if (cmd === 'speak' || cmd === 'play') window.webster[cmd](data.text, data.options || {});
+        else if (cmd === 'exportWAV') window.webster.exportWAV(data.text, data.lang, data.options);
+        else if (['stop', 'pause', 'resume'].includes(cmd)) window.webster[cmd]();
+    }
+});
+</script>
+</body>
+</html>

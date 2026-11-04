@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTMLNLM — Browser Neural Runtime</title>
+<style>
+/* HTMLNLM STYLESHEET
+  Implements the CSS state machine using :has() and sibling selectors,
+  completely eliminating the need for Javascript UI frameworks.
+*/
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #171717;
+  --bg-tertiary: #262626;
+  --border: #404040;
+  --accent: #14b8a6; /* Teal accent */
+  --accent-dim: #0f766e;
+  --accent-glow: rgba(20, 184, 166, 0.2);
+  --text-main: #f5f5f5;
+  --text-muted: #a3a3a3;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --radius: 6px;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body, html { height: 100%; background: var(--bg-primary); color: var(--text-main); font-family: var(--font-sans); font-size: 13px; overflow: hidden; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Layout Structure */
+#app-container { display: flex; flex-direction: column; height: 100vh; }
+
+/* Header */
+header { display: flex; align-items: center; padding: 12px 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); z-index: 10; }
+header h1 { color: var(--accent); font-size: 16px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -0.5px; margin-right: 12px; }
+.subtitle { color: var(--text-muted); font-size: 12px; }
+.status-pill { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-glow); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--accent-dim); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Routing Logic via Checkboxes */
+input[type="radio"][name="route"] { display: none; }
+
+/* Navigation */
+nav { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.nav-tab { padding: 12px 24px; cursor: pointer; color: var(--text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.5px; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+.nav-tab:hover { color: var(--text-main); background: var(--bg-tertiary); }
+
+/* Active Tab Routing */
+body:has(#route-setup:checked) .nav-tab[for="route-setup"],
+body:has(#route-train:checked) .nav-tab[for="route-train"],
+body:has(#route-align:checked) .nav-tab[for="route-align"],
+body:has(#route-infer:checked) .nav-tab[for="route-infer"],
+body:has(#route-io:checked) .nav-tab[for="route-io"] {
+  color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-primary);
+}
+
+/* Screen Routing */
+.screen { display: none; height: 100%; overflow-y: auto; padding: 24px; gap: 24px; align-content: flex-start; flex: 1; }
+body:has(#route-setup:checked) #screen-setup { display: flex; flex-direction: column; }
+body:has(#route-train:checked) #screen-train { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+body:has(#route-align:checked) #screen-align { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+body:has(#route-infer:checked) #screen-infer { display: flex; flex-direction: column; }
+body:has(#route-io:checked) #screen-io { display: flex; flex-direction: column; }
+
+/* Panels */
+.panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+.panel-header { font-family: var(--font-mono); color: var(--text-main); font-size: 12px; font-weight: 700; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+
+/* Forms & Controls */
+.control-group { margin-bottom: 16px; }
+.control-group label { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 11px; margin-bottom: 6px; font-weight: 500;}
+.control-group input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.control-group input[type="text"], .control-group textarea { width: 100%; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-main); font-family: var(--font-mono); font-size: 12px; padding: 10px; border-radius: 4px; outline: none; transition: border 0.2s; }
+.control-group input[type="text"]:focus, .control-group textarea:focus { border-color: var(--accent); }
+.control-group textarea { resize: vertical; min-height: 80px; }
+.val-display { color: var(--accent); font-weight: 700; font-family: var(--font-mono); }
+
+/* Buttons */
+.btn { padding: 10px 16px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-main); font-family: var(--font-sans); font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 4px; transition: all 0.2s; text-align: center; }
+.btn:hover:not(:disabled) { background: var(--bg-primary); border-color: var(--accent); color: var(--accent); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--accent); }
+.btn.danger { border-color: var(--error); color: var(--error); }
+.btn.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+.btn-row .btn { flex: 1; min-width: 120px; }
+
+/* Visualizations (Pure CSS) */
+.css-graph-container { display: flex; align-items: flex-end; gap: 1px; height: 120px; background: var(--bg-primary); border: 1px solid var(--border); padding: 4px; border-radius: 4px; overflow: hidden; }
+.loss-bar { flex: 1; background: var(--accent); transition: height 0.1s linear; min-height: 1px; max-width: 4px; opacity: 0.8; }
+
+.hist-container { display: flex; gap: 4px; align-items: flex-end; height: 80px; margin-top: 10px; }
+.hist-bar { flex: 1; transition: height 0.3s ease; min-height: 2px; border-radius: 2px 2px 0 0; }
+#hist-neg { background: var(--error); }
+#hist-zero { background: var(--border); }
+#hist-pos { background: var(--accent); }
+
+/* Utilities */
+.dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px 20px; text-align: center; color: var(--text-muted); cursor: pointer; transition: all 0.2s; background: var(--bg-primary); }
+.dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--bg-secondary); color: var(--accent); }
+.terminal-output { flex: 1; background: var(--bg-primary); border: 1px solid var(--border); padding: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); overflow-y: auto; border-radius: 4px; line-height: 1.5; min-height: 150px; }
+.terminal-output span.highlight { color: var(--accent); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-top: 16px; background: var(--bg-primary); padding: 12px; border-radius: 4px; border: 1px solid var(--border); }
+.stat-item { display: flex; flex-direction: column; font-size: 11px; color: var(--text-muted); }
+.stat-item span { font-size: 14px; font-weight: 700; color: var(--text-main); font-family: var(--font-mono); margin-top: 4px; }
+
+/* Footer / Telemetry */
+footer { display: flex; gap: 20px; align-items: center; padding: 8px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border); font-size: 11px; font-family: var(--font-mono); overflow-x: auto; white-space: nowrap; flex-shrink: 0; }
+.footer-stat { color: var(--text-muted); }
+.footer-stat span { color: var(--accent); }
+.mem-gauge-wrapper { width: 100px; height: 6px; background: var(--bg-primary); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); margin-left: 8px; display: inline-block; vertical-align: middle; }
+#mem-gauge-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s; }
+</style>
+</head>
+<body>
+
+<!-- CSS State Routing Variables -->
+<input type="radio" name="route" id="route-setup" checked>
+<input type="radio" name="route" id="route-train">
+<input type="radio" name="route" id="route-align">
+<input type="radio" name="route" id="route-infer">
+<input type="radio" name="route" id="route-io">
+
+<div id="app-container">
+  <header>
+    <h1>HTMLNLM</h1>
+    <span class="subtitle">Sovereign Browser-Based Compute</span>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      LOCAL SANDBOX
+    </div>
+  </header>
+
+  <nav>
+    <label class="nav-tab" for="route-setup">1. ARCHITECTURE</label>
+    <label class="nav-tab" for="route-train">2. PRE-TRAIN</label>
+    <label class="nav-tab" for="route-align">3. ALIGN (GRPO)</label>
+    <label class="nav-tab" for="route-infer">4. INFERENCE</label>
+    <label class="nav-tab" for="route-io">5. PERSISTENCE</label>
+  </nav>
+
+  <!-- SETUP SCREEN -->
+  <div class="screen" id="screen-setup">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));gap:24px;">
+      
+      <!-- Hyperparameters -->
+      <div class="panel">
+        <div class="panel-header">NETWORK TOPOLOGY (RWKV-v6)</div>
+        <div class="control-group">
+          <label><span>Vocabulary Capacity</span> <span class="val-display" id="val-vocab">2048</span></label>
+          <input type="range" id="cfg-vocab" min="256" max="8192" step="256" value="2048" oninput="updateArchStats()">
+        </div>
+        <div class="control-group">
+          <label><span>Hidden Dimension (D)</span> <span class="val-display" id="val-dim">256</span></label>
+          <input type="range" id="cfg-dim" min="64" max="512" step="64" value="256" oninput="updateArchStats()">
+        </div>
+        <div class="control-group">
+          <label><span>Recurrent Layers (L)</span> <span class="val-display" id="val-layers">4</span></label>
+          <input type="range" id="cfg-layers" min="1" max="16" step="1" value="4" oninput="updateArchStats()">
+        </div>
+        <div class="control-group">
+          <label><span>Context Chunk Size</span> <span class="val-display" id="val-ctx">256</span></label>
+          <input type="range" id="cfg-ctx" min="64" max="1024" step="64" value="256" oninput="updateArchStats()">
+        </div>
+        <div style="margin-top:auto; padding-top:16px; border-top:1px solid var(--border);">
+          <div style="font-family:var(--font-mono); font-size:24px; color:var(--accent); font-weight:700;" id="stat-params">0.0M</div>
+          <div style="color:var(--text-muted); font-size:11px; margin-top:4px;">Total Ternary Parameters</div>
+        </div>
+      </div>
+
+      <!-- Data Ingestion -->
+      <div class="panel">
+        <div class="panel-header">CORPUS INGESTION & BPE</div>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-upload').click()">
+          <svg style="width:24px;height:24px;margin-bottom:8px;opacity:0.7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg><br>
+          Drop .txt corpus here or click<br>
+          <span style="font-size:11px;opacity:0.6;">Requires uncompressed UTF-8 text</span>
+        </div>
+        <input type="file" id="file-upload" accept=".txt,.md" style="display:none" onchange="handleFile(this)">
+        
+        <div class="control-group" style="margin-top:16px;">
+          <textarea id="corpus-input" placeholder="Or paste raw text buffer directly..." oninput="handleTextInput(this.value)"></textarea>
+        </div>
+        
+        <div class="btn-row">
+          <button class="btn" id="btn-build-bpe" onclick="initiateTokenizer()">COMPILE BPE</button>
+          <button class="btn primary" id="btn-alloc" onclick="allocateMemory()" disabled>ALLOCATE VM</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Logs -->
+    <div class="panel">
+      <div class="panel-header">
+        SYSTEM TELEMETRY
+        <button class="btn" style="padding:4px 8px; font-size:10px; min-width:auto;" onclick="document.getElementById('sys-logs').innerHTML=''">CLEAR</button>
+      </div>
+      <div id="sys-logs" class="terminal-output" style="height: 180px;"></div>
+    </div>
+  </div>
+
+  <!-- PRE-TRAIN SCREEN -->
+  <div class="screen" id="screen-train">
+    <div style="display:flex; flex-direction:column; gap:24px;">
+      <div class="panel">
+        <div class="panel-header">OOMB CHUNK-RECURRENT LOSS</div>
+        <div class="css-graph-container" id="loss-graph"></div>
+        <div class="stat-grid">
+          <div class="stat-item">Global Step <span id="ui-step">0</span></div>
+          <div class="stat-item">Current Loss <span id="ui-loss">0.0000</span></div>
+          <div class="stat-item">Throughput <span id="ui-tps">0.0</span> <span style="font-size:10px; font-weight:normal;">tok/sec</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">QUANTIZATION DISTRIBUTION (b1.58)</div>
+        <div class="hist-container">
+          <div class="hist-bar" id="hist-neg" style="height:33%"></div>
+          <div class="hist-bar" id="hist-zero" style="height:34%"></div>
+          <div class="hist-bar" id="hist-pos" style="height:33%"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-top:8px;">
+          <span style="color:var(--error)">-1 (<span id="pct-neg">33</span>%)</span>
+          <span style="color:var(--text-muted)">0 (<span id="pct-zero">34</span>%)</span>
+          <span style="color:var(--accent)">+1 (<span id="pct-pos">33</span>%)</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">OPTIMIZER (QUINTIC MUON)</div>
+        <div class="control-group">
+          <label><span>Learning Rate Base</span> <span class="val-display" id="val-lr">0.020</span></label>
+          <input type="range" id="cfg-lr" min="1" max="100" value="20" oninput="document.getElementById('val-lr').textContent=(this.value/1000).toFixed(3)">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-train-start" onclick="startTraining()">START LOOP</button>
+          <button class="btn" id="btn-train-pause" onclick="pauseTraining()" disabled>PAUSE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex; flex-direction:column;">
+      <div class="panel-header">REAL-TIME INFERENCE SAMPLING</div>
+      <div id="live-eval" class="terminal-output" style="font-size:13px; color:var(--text-main);">Model not allocated.</div>
+    </div>
+  </div>
+
+  <!-- ALIGN SCREEN (GRPO) -->
+  <div class="screen" id="screen-align">
+    <div style="display:flex; flex-direction:column; gap:24px;">
+      <div class="panel">
+        <div class="panel-header">GROUP RELATIVE POLICY OPTIMIZATION</div>
+        <p style="font-size:11px; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">
+          Executes critic-free reinforcement learning. Generates a cohort of responses, evaluates against the target reward condition, and updates weights via Z-score normalized advantages.
+        </p>
+        <div class="control-group">
+          <label>Prompt Condition</label>
+          <textarea id="grpo-prompt">Generate a reasoning trace before answering.</textarea>
+        </div>
+        <div class="control-group">
+          <label>Target Reward Substring</label>
+          <input type="text" id="grpo-target" value="<think>">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-grpo-exec" onclick="executeGRPOEpoch()">EXECUTE GRPO EPOCH</button>
+        </div>
+      </div>
+      
+      <div class="panel" style="margin-top:auto;">
+        <div class="panel-header">REINFORCEMENT METRICS</div>
+        <div class="stat-grid">
+          <div class="stat-item">Epochs <span id="ui-grpo-epoch">0</span></div>
+          <div class="stat-item">Cohort Size <span>4</span></div>
+          <div class="stat-item">Avg Reward <span id="ui-grpo-reward">0.000</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="display:flex; flex-direction:column;">
+      <div class="panel-header">COHORT TRAJECTORIES</div>
+      <div id="grpo-output" class="terminal-output" style="display:flex; flex-direction:column; gap:8px;">
+        <span style="opacity:0.5;">Awaiting GRPO initialization...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFERENCE SCREEN -->
+  <div class="screen" id="screen-infer">
+    <div style="display:grid; grid-template-columns: minmax(280px, 320px) 1fr; gap:24px; flex:1; min-height:0;">
+      <div class="panel" style="display:flex; flex-direction:column;">
+        <div class="panel-header">DECODING SAMPLER</div>
+        <div class="control-group">
+          <label><span>Temperature</span> <span class="val-display" id="val-temp">0.80</span></label>
+          <input type="range" id="inf-temp" min="1" max="200" value="80" oninput="document.getElementById('val-temp').textContent=(this.value/100).toFixed(2)">
+        </div>
+        <div class="control-group">
+          <label><span>Top-P Nucleus</span> <span class="val-display" id="val-topp">0.90</span></label>
+          <input type="range" id="inf-topp" min="1" max="100" value="90" oninput="document.getElementById('val-topp').textContent=(this.value/100).toFixed(2)">
+        </div>
+        <div class="control-group">
+          <label><span>Max Output Tokens</span> <span class="val-display" id="val-maxt">200</span></label>
+          <input type="range" id="inf-maxt" min="10" max="1024" step="10" value="200" oninput="document.getElementById('val-maxt').textContent=this.value">
+        </div>
+        
+        <div class="control-group" style="margin-top:auto;">
+          <label>Context Sequence</label>
+          <textarea id="inf-prompt" style="height:140px;" placeholder="Input context sequence..."></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-infer-run" onclick="startInference()">GENERATE</button>
+          <button class="btn danger" id="btn-infer-stop" style="flex: 0.3;" onclick="stopInference()" disabled>HALT</button>
+        </div>
+      </div>
+      
+      <div class="panel" style="display:flex; flex-direction:column;">
+        <div class="panel-header">RUNTIME OUTPUT</div>
+        <div id="inf-output" class="terminal-output" style="font-size:14px; color:var(--text-main);"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERSISTENCE SCREEN -->
+  <div class="screen" id="screen-io">
+    <div class="panel">
+      <div class="panel-header">VIRTUAL MACHINE STATE PERSISTENCE</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:24px; line-height:1.6;">
+        Master weights residing in Javascript Float32Arrays are serialized into uncompressed binary forms. Momentum buffers from the Muon optimizer are actively discarded to strictly minimize storage footprint. Local IndexedDB ensures session continuity entirely offline.
+      </p>
+      
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div style="background:var(--bg-primary); border:1px solid var(--border); padding:24px; border-radius:6px; text-align:center;">
+          <h3 style="color:var(--text-main); font-size:13px; font-family:var(--font-mono); margin-bottom:16px;">LOCAL BROWSER DB</h3>
+          <div class="btn-row" style="justify-content:center;">
+            <button class="btn" onclick="saveToIDB()">COMMIT TO DB</button>
+            <button class="btn" onclick="loadFromIDB()">HYDRATE FROM DB</button>
+          </div>
+        </div>
+        
+        <div style="background:var(--bg-primary); border:1px solid var(--border); padding:24px; border-radius:6px; text-align:center;">
+          <h3 style="color:var(--text-main); font-size:13px; font-family:var(--font-mono); margin-bottom:16px;">EXTERNAL I/O</h3>
+          <div class="btn-row" style="justify-content:center;">
+            <button class="btn" onclick="exportJSON()">SERIALIZE (.JSON)</button>
+            <button class="btn" onclick="document.getElementById('import-file').click()">LOAD (.JSON)</button>
+            <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-stat">V8 Engine: <span id="ft-v8">Active</span></div>
+    <div class="footer-stat">Corpus Size: <span id="ft-corpus">0</span> bytes</div>
+    <div class="footer-stat">Allocated Tokens: <span id="ft-tok">0</span></div>
+    <div style="margin-left:auto; display:flex; align-items:center;" class="footer-stat">
+      Heap Mem: <span id="ft-mem">0.0</span> MB
+      <div class="mem-gauge-wrapper"><div id="mem-gauge-fill"></div></div>
+    </div>
+  </footer>
+</div>
+
+<script>
+/**
+ * HTMLNLM CORE RUNTIME
+ * Synthesizes BitNet b1.58, T-MAC Microkernel, RWKV-v6, Muon Optimizer, and OOMB.
+ */
+
+/* --- SYSTEM CONSTANTS & UTILITIES --- */
+const CONFIG = {
+  oomb_chunk_size: 64,
+  muon_wd: 0.01,
+  muon_momentum: 0.95,
+  grad_accum_steps: 4,
+  grpo_g_size: 4
+};
+
+// Async utility to prevent UI blocking
+const yieldToMain = () => new Promise(r => setTimeout(r, 0));
+
+function sysLog(msg, type = 'info') {
+  const el = document.getElementById('sys-logs');
+  const color = type === 'error' ? 'var(--error)' : type === 'warn' ? 'var(--warning)' : type === 'ok' ? 'var(--accent)' : 'var(--text-muted)';
+  el.innerHTML += `<div style="color:${color}">[${new Date().toISOString().substring(11, 19)}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// Memory Monitoring
+setInterval(() => {
+  if (performance.memory) {
+    const mb = performance.memory.usedJSHeapSize / 1048576;
+    document.getElementById('ft-mem').textContent = mb.toFixed(1);
+    document.getElementById('mem-gauge-fill').style.width = Math.min(100, mb / 40.96) + '%'; // Assumes ~4GB max
+  }
+}, 1000);
+
+
+/* --- T-MAC: TABLE LOOKUP MICROKERNEL --- */
+class TMAC {
+  // Packs 4 ternary weights {-1, 0, 1} into a single Uint8 (0-80 range)
+  static packTernary(t0, t1, t2, t3) {
+    return (t0 + 1) + 3 * (t1 + 1) + 9 * (t2 + 1) + 27 * (t3 + 1);
+  }
+  
+  static unpackTernary(idx) {
+    let rem = idx;
+    const t0 = (rem % 3) - 1; rem = Math.floor(rem / 3);
+    const t1 = (rem % 3) - 1; rem = Math.floor(rem / 3);
+    const t2 = (rem % 3) - 1; rem = Math.floor(rem / 3);
+    const t3 = (rem % 3) - 1;
+    return [t0, t1, t2, t3];
+  }
+
+  static quantizeWeights(masterWeights) {
+    const n = masterWeights.length;
+    const blocks = Math.ceil(n / 4);
+    const packed = new Uint8Array(blocks);
+    
+    // Absmean Scaling
+    let sumAbs = 0;
+    for (let i = 0; i < n; i++) sumAbs += Math.abs(masterWeights[i]);
+    const gamma = (sumAbs / n) || 1e-8;
+    
+    // RoundClip
+    for (let b = 0; b < blocks; b++) {
+      const base = b * 4;
+      const t = [0, 0, 0, 0];
+      for (let j = 0; j < 4; j++) {
+        if (base + j < n) {
+          t[j] = Math.max(-1, Math.min(1, Math.round(masterWeights[base + j] / gamma)));
+        }
+      }
+      packed[b] = TMAC.packTernary(t[0], t[1], t[2], t[3]);
+    }
+    return { packed, gamma };
+  }
+
+  // Generate the 81-state LUT for a given 4-element input vector
+  static generateLUT(v0, v1, v2, v3) {
+    const lut = new Float32Array(81);
+    for (let i = 0; i < 81; i++) {
+      const [t0, t1, t2, t3] = TMAC.unpackTernary(i);
+      lut[i] = (t0 * v0) + (t1 * v1) + (t2 * v2) + (t3 * v3);
+    }
+    return lut;
+  }
+
+  // Memory-bound table lookup matrix multiplication (Bypasses ALU mults)
+  static execute(packedWeights, input, outDim, inDim, gamma) {
+    const output = new Float32Array(outDim);
+    const blocksPerRow = Math.ceil(inDim / 4);
+    
+    // 1. Precompute all LUTs for the input vector (fits entirely in L1 cache)
+    const luts = [];
+    for (let b = 0; b < blocksPerRow; b++) {
+      const base = b * 4;
+      luts.push(TMAC.generateLUT(
+        base < inDim ? input[base] : 0,
+        base + 1 < inDim ? input[base + 1] : 0,
+        base + 2 < inDim ? input[base + 2] : 0,
+        base + 3 < inDim ? input[base + 3] : 0
+      ));
+    }
+    
+    // 2. Gather operations via sequential array indexing
+    for (let o = 0; o < outDim; o++) {
+      let acc = 0;
+      const rowBase = o * blocksPerRow;
+      for (let b = 0; b < blocksPerRow; b++) {
+        acc += luts[b][packedWeights[rowBase + b]];
+      }
+      output[o] = acc * gamma;
+    }
+    return output;
+  }
+}
+
+
+/* --- BITLINEAR (b1.58) --- */
+class BitLinear {
+  constructor(inDim, outDim) {
+    this.inDim = inDim; 
+    this.outDim = outDim;
+    this.weight = new Float32Array(outDim * inDim);
+    this.grad = new Float32Array(outDim * inDim);
+    this.momentum = new Float32Array(outDim * inDim);
+    
+    // Kaiming uniform init
+    const scale = Math.sqrt(3.0 / inDim);
+    for (let i = 0; i < this.weight.length; i++) {
+      this.weight[i] = (Math.random() * 2 - 1) * scale;
+    }
+    
+    this._cache = { packed: null, gamma: 1.0, dirty: true };
+  }
+
+  pack() {
+    if (this._cache.dirty || !this._cache.packed) {
+      const { packed, gamma } = TMAC.quantizeWeights(this.weight);
+      this._cache.packed = packed;
+      this._cache.gamma = gamma;
+      this._cache.dirty = false;
+    }
+    return this._cache;
+  }
+
+  forward(x) {
+    const { packed, gamma } = this.pack();
+    return TMAC.execute(packed, x, this.outDim, this.inDim, gamma);
+  }
+
+  // Straight-Through Estimator (STE)
+  backward(gradOut, x) {
+    // Accumulate master gradients
+    for (let o = 0; o < this.outDim; o++) {
+      const rowOffset = o * this.inDim;
+      const go = gradOut[o];
+      for (let i = 0; i < this.inDim; i++) {
+        this.grad[rowOffset + i] += go * x[i];
+      }
+    }
+    
+    // Pass gradient to previous layer
+    const gradIn = new Float32Array(this.inDim);
+    for (let i = 0; i < this.inDim; i++) {
+      let acc = 0;
+      for (let o = 0; o < this.outDim; o++) {
+        acc += this.weight[o * this.inDim + i] * gradOut[o];
+      }
+      gradIn[i] = acc;
+    }
+    return gradIn;
+  }
+
+  zeroGrad() { this.grad.fill(0); }
+  markDirty() { this._cache.dirty = true; }
+}
+
+
+/* --- LAYER NORMALIZATION --- */
+class LayerNorm {
+  constructor(dim) {
+    this.dim = dim;
+    this.weight = new Float32Array(dim).fill(1.0);
+    this.bias = new Float32Array(dim).fill(0.0);
+    this.grad_w = new Float32Array(dim);
+    this.grad_b = new Float32Array(dim);
+  }
+  
+  forward(x) {
+    let mean = 0, v = 0;
+    for (let i = 0; i < this.dim; i++) mean += x[i];
+    mean /= this.dim;
+    for (let i = 0; i < this.dim; i++) v += (x[i] - mean) ** 2;
+    
+    const rstd = 1.0 / Math.sqrt((v / this.dim) + 1e-5);
+    const out = new Float32Array(this.dim);
+    
+    // Save for backward
+    this._x = x; this._mean = mean; this._rstd = rstd;
+    
+    for (let i = 0; i < this.dim; i++) {
+      const norm = (x[i] - mean) * rstd;
+      out[i] = norm * this.weight[i] + this.bias[i];
+    }
+    return out;
+  }
+  
+  backward(gradOut) {
+    if (!this._x) return new Float32Array(this.dim);
+    const D = this.dim;
+    let sumIn = 0, sumDot = 0;
+    const dxNorm = new Float32Array(D);
+    
+    for (let i = 0; i < D; i++) {
+      const norm_x = (this._x[i] - this._mean) * this._rstd;
+      this.grad_w[i] += gradOut[i] * norm_x;
+      this.grad_b[i] += gradOut[i];
+      
+      dxNorm[i] = gradOut[i] * this.weight[i];
+      sumIn += dxNorm[i];
+      sumDot += dxNorm[i] * norm_x;
+    }
+    
+    const gradIn = new Float32Array(D);
+    for (let i = 0; i < D; i++) {
+      const norm_x = (this._x[i] - this._mean) * this._rstd;
+      gradIn[i] = this._rstd * (dxNorm[i] - (sumIn + norm_x * sumDot) / D);
+    }
+    return gradIn;
+  }
+  
+  zeroGrad() { this.grad_w.fill(0); this.grad_b.fill(0); }
+  
+  step(lr) {
+    for(let i=0; i<this.dim; i++){
+      this.weight[i] -= lr * this.grad_w[i];
+      this.bias[i] -= lr * this.grad_b[i];
+    }
+  }
+}
+
+
+/* --- RWKV-v6 FINCH ARCHITECTURE --- */
+class RWKVv6Block {
+  constructor(dim, dimFFN) {
+    this.dim = dim;
+    this.ln1 = new LayerNorm(dim);
+    this.ln2 = new LayerNorm(dim);
+
+    // Time Mixing
+    this.W_x_rx = new BitLinear(dim, dim);
+    this.W_x_kx = new BitLinear(dim, dim);
+    this.W_x_vx = new BitLinear(dim, dim);
+    this.W_x_w  = new BitLinear(dim, dim);
+    this.Wr = new BitLinear(dim, dim);
+    this.Wk = new BitLinear(dim, dim);
+    this.Wv = new BitLinear(dim, dim);
+    this.Wo = new BitLinear(dim, dim);
+
+    // Channel Mixing
+    this.W_x_rx2 = new BitLinear(dim, dim);
+    this.W_x_kx2 = new BitLinear(dim, dim);
+    this.Wr2 = new BitLinear(dim, dim);
+    this.Wk2 = new BitLinear(dim, dimFFN);
+    this.Wv2 = new BitLinear(dimFFN, dim);
+  }
+
+  static sigmoid(x) {
+    const o = new Float32Array(x.length);
+    for (let i=0; i<x.length; i++) o[i] = 1 / (1 + Math.exp(-Math.max(-40, Math.min(40, x[i]))));
+    return o;
+  }
+
+  ddlerp(x, prevX, mu_proj) {
+    const o = new Float32Array(this.dim);
+    const mu = RWKVv6Block.sigmoid(mu_proj);
+    for (let i=0; i<this.dim; i++) o[i] = x[i] * (1 - mu[i]) + prevX[i] * mu[i];
+    return o;
+  }
+
+  forward(x, state) {
+    const dim = this.dim;
+    const x_ln = this.ln1.forward(x);
+    const prevX = state.prevX || new Float32Array(dim);
+
+    // Dynamic Time-Mixing LoRA interpolations
+    const rx = this.ddlerp(x_ln, prevX, this.W_x_rx.forward(x_ln));
+    const kx = this.ddlerp(x_ln, prevX, this.W_x_kx.forward(x_ln));
+    const vx = this.ddlerp(x_ln, prevX, this.W_x_vx.forward(x_ln));
+
+    const r = RWKVv6Block.sigmoid(this.Wr.forward(rx));
+    const k = this.Wk.forward(kx);
+    const v = this.Wv.forward(vx);
+    const w_proj = this.W_x_w.forward(x_ln);
+
+    const num = state.num || new Float32Array(dim);
+    const den = state.den || new Float32Array(dim).fill(1);
+    const wkv = new Float32Array(dim);
+
+    // WKV Linear Recurrence (O(1) Memory Profile)
+    for (let i = 0; i < dim; i++) {
+      // Clamping critical for JS stability
+      const w_clamped = Math.max(-5, Math.min(5, w_proj[i] - 1.0));
+      const decay = Math.exp(-Math.exp(w_clamped)); 
+      const expK = Math.exp(Math.max(-30, Math.min(30, k[i])));
+      
+      num[i] = decay * num[i] + expK * v[i];
+      den[i] = decay * den[i] + expK;
+      wkv[i] = num[i] / (Math.abs(den[i]) + 1e-8);
+    }
+
+    const gated = new Float32Array(dim);
+    for (let i = 0; i < dim; i++) gated[i] = r[i] * wkv[i];
+    
+    const tmix_out = this.Wo.forward(gated);
+    const h = new Float32Array(dim);
+    for (let i = 0; i < dim; i++) h[i] = x[i] + tmix_out[i];
+
+    // Channel Mixing
+    const h_ln = this.ln2.forward(h);
+    const prevX2 = state.prevX2 || new Float32Array(dim);
+    
+    const rx2 = this.ddlerp(h_ln, prevX2, this.W_x_rx2.forward(h_ln));
+    const kx2 = this.ddlerp(h_ln, prevX2, this.W_x_kx2.forward(h_ln));
+
+    const r2 = RWKVv6Block.sigmoid(this.Wr2.forward(rx2));
+    const k_cmix = this.Wk2.forward(kx2);
+    
+    // Squared ReLU
+    const k_relu2 = new Float32Array(k_cmix.length);
+    for(let i=0; i<k_cmix.length; i++) k_relu2[i] = Math.max(0, k_cmix[i]) ** 2;
+    
+    const cmix_out = this.Wv2.forward(k_relu2);
+    
+    const out = new Float32Array(dim);
+    for (let i = 0; i < dim; i++) out[i] = h[i] + r2[i] * cmix_out[i];
+
+    // Persist recurrent state
+    return { 
+      out, 
+      state: { prevX: new Float32Array(x_ln), prevX2: new Float32Array(h_ln), num: new Float32Array(num), den: new Float32Array(den) } 
+    };
+  }
+}
+
+class LanguageModel {
+  constructor(cfg) {
+    this.cfg = cfg;
+    this.embedding = new Float32Array(cfg.vocab * cfg.dim);
+    const scale = Math.sqrt(1.0 / cfg.dim);
+    for(let i=0; i<this.embedding.length; i++) this.embedding[i] = (Math.random()*2-1) * scale;
+    
+    this.ln_in = new LayerNorm(cfg.dim);
+    this.blocks = Array.from({length: cfg.layers}, () => new RWKVv6Block(cfg.dim, cfg.dim * 2));
+    this.ln_out = new LayerNorm(cfg.dim);
+    this.head = new BitLinear(cfg.dim, cfg.vocab);
+  }
+
+  getEmptyState() {
+    return this.blocks.map(() => ({ prevX: null, prevX2: null, num: null, den: null }));
+  }
+
+  forward(tokenId, state) {
+    const id = (tokenId >= 0 && tokenId < this.cfg.vocab) ? tokenId : 0;
+    let x = new Float32Array(this.cfg.dim);
+    for(let i=0; i<this.cfg.dim; i++) x[i] = this.embedding[id * this.cfg.dim + i];
+    
+    x = this.ln_in.forward(x);
+    const nextState = [];
+    
+    for(let i=0; i<this.blocks.length; i++) {
+      const res = this.blocks[i].forward(x, state[i]);
+      x = res.out;
+      nextState.push(res.state);
+    }
+    
+    const preHead = this.ln_out.forward(x);
+    const logits = this.head.forward(preHead);
+    return { logits, state: nextState, preHead };
+  }
+
+  backward(gradOut, preHeadInput) {
+    // Truncated Backprop: We primarily update the final mapping (head + norms + top layer)
+    // Deep temporal backprop inside JS is memory-prohibitive without webGPU
+    let gradIn = this.head.backward(gradOut, preHeadInput);
+    gradIn = this.ln_out.backward(gradIn);
+    if(this.blocks.length > 0) {
+      this.blocks[this.blocks.length-1].ln2.backward(gradIn);
+    }
+  }
+
+  getLinearLayers() {
+    const layers = [];
+    for(const b of this.blocks) {
+      layers.push(b.W_x_rx, b.W_x_kx, b.W_x_vx, b.W_x_w, b.Wr, b.Wk, b.Wv, b.Wo, b.W_x_rx2, b.W_x_kx2, b.Wr2, b.Wk2, b.Wv2);
+    }
+    layers.push(this.head);
+    return layers;
+  }
+
+  zeroGrad() {
+    this.ln_in.zeroGrad(); this.ln_out.zeroGrad();
+    for(const b of this.blocks) { b.ln1.zeroGrad(); b.ln2.zeroGrad(); }
+    for(const l of this.getLinearLayers()) l.zeroGrad();
+  }
+}
+
+
+/* --- MUON OPTIMIZER (Newton-Schulz Quintic) --- */
+class MuonOptimizer {
+  constructor(lr) { this.lr = lr; }
+
+  newtonSchulz5(G, rows, cols) {
+    const n = rows * cols;
+    let norm = 0;
+    for(let i=0; i<n; i++) norm += G[i]*G[i];
+    norm = Math.sqrt(norm) + 1e-12;
+    
+    let Gc = new Float32Array(n);
+    for(let i=0; i<n; i++) Gc[i] = G[i] / norm;
+
+    // Engineered quintic polynomial coefficients for maximal orthogonal projection speed
+    const a = 3.4445, b = -4.7750, c = 2.0315;
+
+    // Fixed 5 iterations
+    for (let iter = 0; iter < 5; iter++) {
+      // S = Gc^T * Gc
+      const S = new Float32Array(cols * cols);
+      for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < cols; y++) {
+          let dot = 0;
+          for (let r = 0; r < rows; r++) dot += Gc[r * cols + x] * Gc[r * cols + y];
+          S[x * cols + y] = dot;
+        }
+      }
+      // S2 = S * S
+      const S2 = new Float32Array(cols * cols);
+      for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < cols; y++) {
+          let dot = 0;
+          for (let k = 0; k < cols; k++) dot += S[x * cols + k] * S[k * cols + y];
+          S2[x * cols + y] = dot;
+        }
+      }
+      // Poly = aI + bS + cS2
+      const Poly = new Float32Array(cols * cols);
+      for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < cols; y++) {
+          Poly[x * cols + y] = (x === y ? a : 0) + b * S[x * cols + y] + c * S2[x * cols + y];
+        }
+      }
+      // Gnew = Gc * Poly
+      const Gnew = new Float32Array(n);
+      for (let r = 0; r < rows; r++) {
+        for (let y = 0; y < cols; y++) {
+          let acc = 0;
+          for (let x = 0; x < cols; x++) acc += Gc[r * cols + x] * Poly[x * cols + y];
+          Gnew[r * cols + y] = acc;
+        }
+      }
+      Gc = Gnew;
+    }
+    return Gc;
+  }
+
+  async step(model) {
+    const layers = model.getLinearLayers();
+    for (const layer of layers) {
+      const len = layer.weight.length;
+      // Nesterov momentum accumulation
+      for (let i = 0; i < len; i++) {
+        layer.momentum[i] = CONFIG.muon_momentum * layer.momentum[i] + layer.grad[i];
+      }
+      // Apply Orthogonal Projection
+      const orth = this.newtonSchulz5(layer.momentum, layer.outDim, layer.inDim);
+      
+      // Update Weights (with weight decay)
+      for (let i = 0; i < len; i++) {
+        layer.weight[i] = layer.weight[i] * (1 - this.lr * CONFIG.muon_wd) - this.lr * orth[i];
+      }
+      layer.markDirty();
+      await yieldToMain(); // Prevent UI lockup during heavy matrix ops
+    }
+    
+    const ln_lr = this.lr * 0.1;
+    model.ln_in.step(ln_lr);
+    model.ln_out.step(ln_lr);
+    for(const b of model.blocks) { b.ln1.step(ln_lr); b.ln2.step(ln_lr); }
+  }
+}
+
+
+/* --- OOMB CHUNK-RECURRENT TRAINER --- */
+class Trainer {
+  constructor(model, optimizer) {
+    this.model = model;
+    this.opt = optimizer;
+    this.isRunning = false;
+    this.isPaused = false;
+    this.globalStep = 0;
+  }
+
+  // CrossEntropy with Softmax
+  computeLossAndGrad(logits, targetId) {
+    let max = -Infinity;
+    for(let i=0; i<logits.length; i++) if(logits[i] > max) max = logits[i];
+    let sum = 0;
+    const probs = new Float32Array(logits.length);
+    for(let i=0; i<logits.length; i++) {
+      probs[i] = Math.exp(logits[i] - max);
+      sum += probs[i];
+    }
+    for(let i=0; i<logits.length; i++) probs[i] /= sum;
+    
+    const loss = -Math.log(probs[targetId] + 1e-8);
+    probs[targetId] -= 1.0; // Gradient derivation
+    return { loss, grad: probs };
+  }
+
+  async trainSequence(tokens) {
+    const len = tokens.length;
+    if(len < 2) return 0;
+
+    let state = this.model.getEmptyState();
+    const checkpoints = [];
+    
+    // 1. Forward Pass (Discard activations, save boundary states to cheat memory)
+    for(let start = 0; start < len - 1; start += CONFIG.oomb_chunk_size) {
+      // Deep clone state safely
+      const stateCopy = state.map(s => ({
+        prevX: s.prevX ? new Float32Array(s.prevX) : null,
+        prevX2: s.prevX2 ? new Float32Array(s.prevX2) : null,
+        num: s.num ? new Float32Array(s.num) : null,
+        den: s.den ? new Float32Array(s.den) : null
+      }));
+      checkpoints.push({ start, state: stateCopy });
+      
+      const end = Math.min(start + CONFIG.oomb_chunk_size, len - 1);
+      for(let t = start; t < end; t++) {
+        state = this.model.forward(tokens[t], state).state;
+      }
+      await yieldToMain();
+    }
+
+    state = null; // Explicit GC hint
+    let totalLoss = 0;
+
+    // 2. Backward Pass (Recompute on the fly)
+    for(let i = checkpoints.length - 1; i >= 0; i--) {
+      const { start, state: rState } = checkpoints[i];
+      const end = Math.min(start + CONFIG.oomb_chunk_size, len - 1);
+      
+      // Recompute activations
+      const acts = [];
+      let currentState = rState;
+      for(let t = start; t < end; t++) {
+        const res = this.model.forward(tokens[t], currentState);
+        acts.push({ preHead: res.preHead, logits: res.logits });
+        currentState = res.state;
+      }
+
+      // Compute gradients backwards
+      for(let j = acts.length - 1; j >= 0; j--) {
+        const targetId = tokens[start + j + 1];
+        const { loss, grad } = this.computeLossAndGrad(acts[j].logits, targetId);
+        totalLoss += loss;
+        this.model.backward(grad, acts[j].preHead);
+      }
+      await yieldToMain();
+    }
+
+    return totalLoss / (len - 1);
+  }
+}
+
+
+/* --- ASYNC BPE TOKENIZER (WebWorker) --- */
+const bpeScript = `
+self.onmessage = function(e) {
+  try {
+    const { text, targetVocab } = e.data;
+    // Map text to initial byte stream safely
+    const str = text.substring(0, 1000000); // 1MB limit for nano train
+    const bytes = new TextEncoder().encode(str);
+    let tokens = new Uint32Array(bytes.length);
+    for(let i=0; i<bytes.length; i++) tokens[i] = bytes[i];
+    
+    const vocab = {}; const merges = [];
+    for(let i=0; i<256; i++) vocab[i] = String.fromCharCode(i);
+    let nextId = 256;
+
+    for(let m = 0; m < (targetVocab - 256); m++) {
+      if (tokens.length < 2) break;
+      
+      // Frequency count via fast map
+      const freq = new Map();
+      for(let i=0; i<tokens.length-1; i++) {
+        const key = tokens[i] * 65536 + tokens[i+1]; // Pack pairs
+        freq.set(key, (freq.get(key) || 0) + 1);
+      }
+      
+      let bestKey = -1, maxCount = 0;
+      for(const [k, c] of freq) { if(c > maxCount) { maxCount = c; bestKey = k; } }
+      if (maxCount < 2) break;
+      
+      const left = Math.floor(bestKey / 65536), right = bestKey % 65536;
+      const newId = nextId++;
+      vocab[newId] = (vocab[left] || '') + (vocab[right] || '');
+      merges.push([bestKey, newId]);
+      
+      // Construct new array
+      const nt = new Uint32Array(tokens.length);
+      let j=0, i=0;
+      while(i < tokens.length) {
+        if(i < tokens.length-1 && tokens[i] === left && tokens[i+1] === right) {
+          nt[j++] = newId; i += 2;
+        } else {
+          nt[j++] = tokens[i++];
+        }
+      }
+      tokens = nt.slice(0, j);
+      
+      if(m % 100 === 0) self.postMessage({ type: 'progress', pct: m / (targetVocab - 256) });
+    }
+    
+    self.postMessage({ type: 'done', vocab, merges, actualVocab: nextId });
+  } catch(err) {
+    self.postMessage({ type: 'error', msg: err.message });
+  }
+};
+`;
+
+class NanoTokenizer {
+  constructor() { this.trained = false; }
+  
+  async train(text, vocabSize) {
+    return new Promise((resolve, reject) => {
+      const blob = new Blob([bpeScript], { type: 'application/javascript' });
+      const worker = new Worker(URL.createObjectURL(blob));
+      
+      worker.onmessage = (e) => {
+        if(e.data.type === 'progress') sysLog(`BPE Compiling... ${(e.data.pct*100).toFixed(0)}%`);
+        else if(e.data.type === 'error') reject(e.data.msg);
+        else if(e.data.type === 'done') {
+          this.vocab = e.data.vocab;
+          this.merges = e.data.merges;
+          this.size = e.data.actualVocab;
+          this.trained = true;
+          worker.terminate();
+          resolve();
+        }
+      };
+      worker.postMessage({ text, targetVocab: vocabSize });
+    });
+  }
+
+  encode(text) {
+    if(!this.trained) return [];
+    let tokens = Array.from(new TextEncoder().encode(text));
+    for (const [key, newId] of this.merges) {
+      const left = Math.floor(key / 65536), right = key % 65536;
+      const res = [];
+      let i = 0;
+      while(i < tokens.length) {
+        if(i < tokens.length - 1 && tokens[i] === left && tokens[i+1] === right) {
+          res.push(newId); i += 2;
+        } else { res.push(tokens[i++]); }
+      }
+      tokens = res;
+    }
+    return tokens;
+  }
+
+  decode(ids) {
+    return ids.map(id => this.vocab[id] || '').join('');
+  }
+}
+
+// Utility: Sampling
+function sampleLogits(logits, temp, topP) {
+  if (temp <= 0.01) {
+    let max = -Infinity, best = 0;
+    for(let i=0; i<logits.length; i++) { if(logits[i]>max){ max=logits[i]; best=i; } }
+    return best;
+  }
+  
+  const probs = new Float32Array(logits.length);
+  let max = -Infinity;
+  for(let i=0; i<logits.length; i++) {
+    logits[i] /= temp;
+    if(logits[i] > max) max = logits[i];
+  }
+  let sum = 0;
+  for(let i=0; i<logits.length; i++) {
+    probs[i] = Math.exp(logits[i] - max);
+    sum += probs[i];
+  }
+  for(let i=0; i<logits.length; i++) probs[i] /= sum;
+
+  if (topP < 1.0) {
+    const sorted = Array.from(probs).map((p, i) => ({p, i})).sort((a,b) => b.p - a.p);
+    let cum = 0, newSum = 0;
+    const filtered = new Float32Array(logits.length);
+    for(let item of sorted) {
+      filtered[item.i] = item.p;
+      newSum += item.p;
+      cum += item.p;
+      if(cum > topP) break;
+    }
+    for(let i=0; i<logits.length; i++) probs[i] = filtered[i] / newSum;
+  }
+
+  const r = Math.random();
+  let acc = 0;
+  for(let i=0; i<logits.length; i++) {
+    if(probs[i] > 0) {
+      acc += probs[i];
+      if(r <= acc) return i;
+    }
+  }
+  return 0;
+}
+
+
+/* --- APPLICATION CONTROLLER --- */
+const App = {
+  model: null,
+  tokenizer: new NanoTokenizer(),
+  trainer: null,
+  corpusData: [],
+  corpusText: ''
+};
+
+function updateArchStats() {
+  const v = parseInt(document.getElementById('cfg-vocab').value);
+  const d = parseInt(document.getElementById('cfg-dim').value);
+  const l = parseInt(document.getElementById('cfg-layers').value);
+  
+  document.getElementById('val-vocab').textContent = v;
+  document.getElementById('val-dim').textContent = d;
+  document.getElementById('val-layers').textContent = l;
+  document.getElementById('val-ctx').textContent = document.getElementById('cfg-ctx').value;
+  
+  // Param count estimation
+  const emb = v * d; const head = d * v;
+  const block = d*d*8 + d*(d*2) + (d*2)*d; // Rough linear matrix sizes
+  const total = emb + head + (l * block);
+  
+  document.getElementById('stat-params').textContent = (total / 1000000).toFixed(2) + 'M';
+}
+
+function handleTextInput(txt) {
+  App.corpusText = txt;
+  document.getElementById('ft-corpus').textContent = txt.length;
+}
+
+function handleFile(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    handleTextInput(e.target.result);
+    document.getElementById('corpus-input').value = App.corpusText.substring(0, 500) + '...';
+    sysLog('Corpus File Read Successfully.', 'ok');
+  };
+  reader.readAsText(file);
+}
+
+async function initiateTokenizer() {
+  if(App.corpusText.length < 100) return sysLog('Corpus too small. Min 100 chars.', 'error');
+  const targetVocab = parseInt(document.getElementById('cfg-vocab').value);
+  
+  document.getElementById('btn-build-bpe').disabled = true;
+  sysLog('Initializing WebWorker BPE Generation...', 'info');
+  
+  try {
+    await App.tokenizer.train(App.corpusText, targetVocab);
+    App.corpusData = App.tokenizer.encode(App.corpusText);
+    document.getElementById('ft-tok').textContent = App.corpusData.length;
+    sysLog(`Tokenizer compiled. Actual vocab: ${App.tokenizer.size}`, 'ok');
+    document.getElementById('btn-alloc').disabled = false;
+  } catch(e) {
+    sysLog('Tokenizer Error: ' + e, 'error');
+  } finally {
+    document.getElementById('btn-build-bpe').disabled = false;
+  }
+}
+
+function allocateMemory() {
+  if(!App.tokenizer.trained) return;
+  const cfg = {
+    vocab: App.tokenizer.size,
+    dim: parseInt(document.getElementById('cfg-dim').value),
+    layers: parseInt(document.getElementById('cfg-layers').value)
+  };
+  try {
+    App.model = new LanguageModel(cfg);
+    sysLog(`VM Allocated: Float32Arrays contiguous memory blocks defined.`, 'ok');
+    document.getElementById('btn-train-start').disabled = false;
+  } catch(e) { sysLog('Allocation failed: ' + e.message, 'error'); }
+}
+
+async function startTraining() {
+  if(!App.model) return;
+  const lr = parseFloat(document.getElementById('cfg-lr').value) / 1000;
+  const ctx = parseInt(document.getElementById('cfg-ctx').value);
+  
+  if(!App.trainer) {
+    const opt = new MuonOptimizer(lr);
+    App.trainer = new Trainer(App.model, opt);
+  } else {
+    App.trainer.opt.lr = lr;
+    App.trainer.isPaused = false;
+  }
+  
+  App.trainer.isRunning = true;
+  document.getElementById('btn-train-start').disabled = true;
+  document.getElementById('btn-train-pause').disabled = false;
+  sysLog('Initiating OOMB Loop...', 'ok');
+  
+  let accumLoss = 0;
+  let microStep = 0;
+  const tStart = Date.now();
+  
+  while(App.trainer.isRunning) {
+    if(App.trainer.isPaused) { await yieldToMain(); continue; }
+    
+    // Sample random chunk
+    const maxIdx = Math.max(0, App.corpusData.length - ctx - 1);
+    const startIdx = Math.floor(Math.random() * maxIdx);
+    const sequence = App.corpusData.slice(startIdx, startIdx + ctx + 1);
+    
+    try {
+      accumLoss += await App.trainer.trainSequence(sequence);
+      microStep++;
+      
+      if(microStep >= CONFIG.grad_accum_steps) {
+        await App.trainer.opt.step(App.model);
+        App.model.zeroGrad();
+        
+        App.trainer.globalStep++;
+        const avgLoss = accumLoss / CONFIG.grad_accum_steps;
+        
+        // Update UI
+        document.getElementById('ui-step').textContent = App.trainer.globalStep;
+        document.getElementById('ui-loss').textContent = avgLoss.toFixed(4);
+        
+        const tps = (App.trainer.globalStep * ctx) / ((Date.now() - tStart) / 1000);
+        document.getElementById('ui-tps').textContent = tps.toFixed(1);
+        
+        updateVisualizations(avgLoss);
+        
+        if (App.trainer.globalStep % 10 === 0) sampleLiveText();
+        
+        accumLoss = 0; microStep = 0;
+      }
+    } catch(e) {
+      sysLog('Training Error: ' + e, 'error');
+      pauseTraining();
+    }
+    await yieldToMain();
+  }
+}
+
+function updateVisualizations(loss) {
+  // Update loss graph
+  const container = document.getElementById('loss-graph');
+  const bar = document.createElement('div');
+  bar.className = 'loss-bar';
+  bar.style.height = Math.max(1, Math.min(100, (loss/10)*100)) + '%';
+  container.appendChild(bar);
+  if(container.children.length > 80) container.removeChild(container.firstChild);
+  
+  // Update Histogram
+  const w = App.model.head.weight;
+  let n=0, z=0, p=0;
+  let sum=0; for(let i=0; i<w.length; i++) sum+=Math.abs(w[i]);
+  const g = sum/w.length;
+  for(let i=0; i<w.length; i++) {
+    const t = Math.round(w[i]/g);
+    if(t<0) n++; else if(t>0) p++; else z++;
+  }
+  
+  document.getElementById('hist-neg').style.height = (n/w.length*100) + '%';
+  document.getElementById('hist-zero').style.height = (z/w.length*100) + '%';
+  document.getElementById('hist-pos').style.height = (p/w.length*100) + '%';
+  
+  document.getElementById('pct-neg').textContent = Math.round(n/w.length*100);
+  document.getElementById('pct-zero').textContent = Math.round(z/w.length*100);
+  document.getElementById('pct-pos').textContent = Math.round(p/w.length*100);
+}
+
+function pauseTraining() {
+  if(App.trainer) App.trainer.isPaused = true;
+  document.getElementById('btn-train-start').disabled = false;
+  document.getElementById('btn-train-pause').disabled = true;
+  sysLog('Training Paused.', 'warn');
+}
+
+async function sampleLiveText() {
+  let s = App.model.getEmptyState();
+  let text = "The";
+  let lastId = App.tokenizer.encode(text)[0] || 0;
+  
+  for(let i=0; i<30; i++) {
+    const res = App.model.forward(lastId, s);
+    s = res.state;
+    lastId = sampleLogits(res.logits, 0.7, 0.9);
+    text += App.tokenizer.decode([lastId]);
+  }
+  document.getElementById('live-eval').innerHTML = `Step ${App.trainer.globalStep}: <span class="highlight">${text}</span>`;
+}
+
+
+/* --- INFERENCE LOGIC --- */
+let activeInference = false;
+async function startInference() {
+  if(!App.model) return sysLog('Model required.', 'error');
+  
+  activeInference = true;
+  document.getElementById('btn-infer-run').disabled = true;
+  document.getElementById('btn-infer-stop').disabled = false;
+  
+  const prompt = document.getElementById('inf-prompt').value;
+  const t = parseFloat(document.getElementById('inf-temp').value) / 100;
+  const p = parseFloat(document.getElementById('inf-topp').value) / 100;
+  const max = parseInt(document.getElementById('inf-maxt').value);
+  
+  const outBox = document.getElementById('inf-output');
+  outBox.innerHTML = `<span style="opacity:0.5">${prompt}</span>`;
+  
+  let state = App.model.getEmptyState();
+  let ids = App.tokenizer.encode(prompt);
+  let lastId = ids.length > 0 ? ids[ids.length-1] : 0;
+  
+  // Prime context
+  for(let i=0; i<ids.length-1; i++) {
+    state = App.model.forward(ids[i], state).state;
+  }
+  
+  try {
+    for(let i=0; i<max && activeInference; i++) {
+      const res = App.model.forward(lastId, state);
+      state = res.state;
+      lastId = sampleLogits(res.logits, t, p);
+      const char = App.tokenizer.decode([lastId]);
+      
+      outBox.innerHTML += `<span class="highlight">${char}</span>`;
+      outBox.scrollTop = outBox.scrollHeight;
+      
+      if(i%5 === 0) await yieldToMain();
+    }
+  } catch(e) { sysLog('Infer Error: ' + e, 'error'); }
+  
+  stopInference();
+}
+
+function stopInference() {
+  activeInference = false;
+  document.getElementById('btn-infer-run').disabled = false;
+  document.getElementById('btn-infer-stop').disabled = true;
+}
+
+
+/* --- GRPO REINFORCEMENT LOGIC --- */
+let grpoEpochCounter = 0;
+async function executeGRPOEpoch() {
+  if(!App.model) return sysLog('Model required for alignment.', 'error');
+  
+  const btn = document.getElementById('btn-grpo-exec');
+  btn.disabled = true;
+  btn.textContent = "COMPUTING COHORTS...";
+  
+  const prompt = document.getElementById('grpo-prompt').value;
+  const target = document.getElementById('grpo-target').value;
+  const outDiv = document.getElementById('grpo-output');
+  outDiv.innerHTML = '';
+  
+  const pIds = App.tokenizer.encode(prompt);
+  const cohorts = [];
+  
+  // 1. Generation Phase
+  for(let i=0; i<CONFIG.grpo_g_size; i++) {
+    let s = App.model.getEmptyState();
+    let last = pIds[0] || 0;
+    for(let j=0; j<pIds.length; j++) {
+      const r = App.model.forward(pIds[j], s); s = r.state; last = pIds[j];
+    }
+    
+    const acts = []; const toks = [];
+    for(let k=0; k<40; k++) {
+      const r = App.model.forward(last, s);
+      acts.push({ logits: r.logits, preHead: r.preHead });
+      s = r.state;
+      last = sampleLogits(r.logits, 0.8, 0.9);
+      toks.push(last);
+    }
+    const textStr = App.tokenizer.decode(toks);
+    cohorts.push({ text: textStr, acts, toks });
+    
+    const isHit = textStr.includes(target);
+    outDiv.innerHTML += `<div style="border-left: 3px solid ${isHit?'var(--accent)':'var(--border)'}; padding-left: 8px;">[${i}] ${textStr}</div>`;
+    await yieldToMain();
+  }
+  
+  // 2. Advantage Estimation (Z-Score)
+  const rewards = cohorts.map(c => c.text.includes(target) ? 1.0 : -0.1);
+  const meanR = rewards.reduce((a,b)=>a+b)/rewards.length;
+  const stdR = Math.sqrt(rewards.reduce((a,b)=>a+(b-meanR)**2)/rewards.length + 1e-8);
+  const advantages = rewards.map(r => (r - meanR) / stdR);
+  
+  document.getElementById('ui-grpo-reward').textContent = meanR.toFixed(3);
+  
+  // 3. Update Policy via Gradients
+  App.model.zeroGrad();
+  for(let i=0; i<cohorts.length; i++) {
+    const adv = advantages[i];
+    for(let j=0; j<cohorts[i].acts.length; j++) {
+      const a = cohorts[i].acts[j];
+      const targetId = cohorts[i].toks[j];
+      
+      let maxL = -Infinity; for(let l of a.logits) if(l>maxL) maxL=l;
+      let sumE = 0; const probs = new Float32Array(a.logits.length);
+      for(let k=0; k<a.logits.length; k++) { probs[k] = Math.exp(a.logits[k]-maxL); sumE+=probs[k]; }
+      for(let k=0; k<a.logits.length; k++) probs[k] /= sumE;
+      
+      probs[targetId] -= 1.0; 
+      for(let k=0; k<probs.length; k++) probs[k] *= adv * 0.1; // Scale by advantage
+      
+      App.model.backward(probs, a.preHead);
+    }
+    await yieldToMain();
+  }
+  
+  // Apply update
+  const opt = new MuonOptimizer(0.005);
+  await opt.step(App.model);
+  
+  grpoEpochCounter++;
+  document.getElementById('ui-grpo-epoch').textContent = grpoEpochCounter;
+  btn.textContent = "EXECUTE GRPO EPOCH";
+  btn.disabled = false;
+  sysLog(`GRPO Epoch ${grpoEpochCounter} Complete.`, 'ok');
+}
+
+
+/* --- PERSISTENCE I/O --- */
+// Binary-to-Base64 utility designed to prevent call stack overflow on large buffers
+function bufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunk = 16384; 
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return window.btoa(binary);
+}
+
+function base64ToBuffer(base64) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function extractStateJSON() {
+  if(!App.model) return null;
+  const state = {
+    cfg: App.model.cfg,
+    tok: { vocab: App.tokenizer.vocab, merges: App.tokenizer.merges, size: App.tokenizer.size },
+    weights: { 
+      emb: bufferToBase64(App.model.embedding.buffer),
+      layers: []
+    }
+  };
+  for(const l of App.model.getLinearLayers()) {
+    state.weights.layers.push(bufferToBase64(l.weight.buffer));
+  }
+  return JSON.stringify(state);
+}
+
+function hydrateFromJSON(jsonString) {
+  const data = JSON.parse(jsonString);
+  
+  // Tok
+  App.tokenizer.vocab = data.tok.vocab;
+  App.tokenizer.merges = data.tok.merges;
+  App.tokenizer.size = data.tok.size;
+  App.tokenizer.trained = true;
+  document.getElementById('ft-tok').textContent = 'Hydrated';
+  
+  // Model
+  App.model = new LanguageModel(data.cfg);
+  App.model.embedding = new Float32Array(base64ToBuffer(data.weights.emb));
+  
+  const layers = App.model.getLinearLayers();
+  for(let i=0; i<layers.length; i++) {
+    layers[i].weight = new Float32Array(base64ToBuffer(data.weights.layers[i]));
+    layers[i].markDirty();
+  }
+  
+  sysLog('Virtual Machine Hydrated Successfully.', 'ok');
+  document.getElementById('route-infer').checked = true; // Route to inference
+}
+
+// File Export
+function exportJSON() {
+  const json = extractStateJSON();
+  if(!json) return sysLog('No state to export.', 'error');
+  
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'htmlnlm_vm_state.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  sysLog('State exported to JSON.', 'ok');
+}
+
+function importJSON(input) {
+  const f = input.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try { hydrateFromJSON(e.target.result); } 
+    catch(err) { sysLog('Hydration Failed: ' + err, 'error'); }
+  };
+  reader.readAsText(f);
+}
+
+// IndexedDB
+const DB_CTX = { name: 'HTMLNLM_DB', store: 'vm_states' };
+function getDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_CTX.name, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(DB_CTX.store);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function saveToIDB() {
+  const json = extractStateJSON();
+  if(!json) return sysLog('No state available.', 'error');
+  sysLog('Committing to IndexedDB...', 'info');
+  try {
+    const db = await getDB();
+    const tx = db.transaction(DB_CTX.store, 'readwrite');
+    tx.objectStore(DB_CTX.store).put(json, 'slot_1');
+    tx.oncomplete = () => sysLog('State securely committed to local DB.', 'ok');
+  } catch(e) { sysLog('DB Save Error: ' + e, 'error'); }
+}
+
+async function loadFromIDB() {
+  sysLog('Hydrating from IndexedDB...', 'info');
+  try {
+    const db = await getDB();
+    const req = db.transaction(DB_CTX.store, 'readonly').objectStore(DB_CTX.store).get('slot_1');
+    req.onsuccess = () => {
+      if(req.result) hydrateFromJSON(req.result);
+      else sysLog('No state found in DB slot.', 'warn');
+    };
+  } catch(e) { sysLog('DB Load Error: ' + e, 'error'); }
+}
+
+// Init
+updateArchStats();
+</script>
+</body>
+</html>
+

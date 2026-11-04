@@ -1,0 +1,305 @@
+{
+ "chromatrack/Chromatrack_Final-5.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 1
+ },
+ "chromatrack/Chromatrack_issuemle.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 1
+ },
+ "chromatrack/chromatrack-main/Chromatrack_Final.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 1
+ },
+ "chromatrack/chromatrack-main/index.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 1
+ },
+ "combats-game-of-doom/combatgameoflife_v2-10.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "combats-game-of-doom/combatgameoflife_v2-2-alt.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "combats-game-of-doom/combatgameoflife_v2-2.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "combats-game-of-doom/combatgameoflife_v2-3.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/HTMLNLM-Deep-6-final.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Claude-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Claude-2.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-1.html": {
+  "errs": [
+   "Unexpected strict mode reserved word"
+  ],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-2.html": {
+  "errs": [
+   "Unexpected strict mode reserved word"
+  ],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-3.html": {
+  "errs": [
+   "Unexpected token 'var'"
+  ],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-4.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-5.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-6.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Deep-7.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-GPT4oMini-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-10.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-2.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-3.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-4.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-5.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-6.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-7.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-8.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Gemini-9.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Grok-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Kimi-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-KimiAgent-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-KimiAgent-2.html": {
+  "errs": [
+   "Invalid or unexpected token"
+  ],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Perp-1.html": {
+  "errs": [
+   "Unexpected identifier '$'"
+  ],
+  "blockedRequests": 0
+ },
+ "htmlnlm/versioning/HTMLNLM-Perp-2.html": {
+  "errs": [
+   "this.updateParams is not a function"
+  ],
+  "blockedRequests": 0
+ },
+ "jiden-furui/index.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "jiden-furui/jiden-furui-2.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "jiden-furui/jiden-furui.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "jiden-furui/jiden_furui_v1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "jiden-furui/jiden_furui_v3_1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "junto/HTMLNLM-junto-node.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "junto/junto-orchestrator.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "qr-blaster/QR_Blasterv1-1.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 2
+ },
+ "the-bootstrap-already-run/the_bootstrap_already_runv1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "triton/Triton-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "triton/Triton-XA-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "triton/Triton-XP-1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "wasm-kernel/WASMKernal1.html": {
+  "errs": [
+   "Inner Sanctum boot failed: CompileError: WebAssembly.instantiate(): Compiling function #5 failed: Invalid global index: 35 @+286",
+   "WebAssembly.instantiate(): Compiling function #5 failed: Invalid global index: 35 @+286"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/Gem-webster2d-v1.html": {
+  "errs": [
+   "Failed to load worklet module script: blob:null/c6e6bab6-71bd-4a2e-bb50-4a8c72ea0516 (a dependency or cross-origin script failed to load)"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/Webster.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/deep-webster2d-v1.html": {
+  "errs": [
+   "Failed to load worklet module script: blob:null/ae57e436-dd08-4cf3-b247-1a0ed66ee06a (a dependency or cross-origin script failed to load)"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/deeps_tts.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/deeps_webster.html": {
+  "errs": [
+   "missing ) after argument list"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/deepwebster2d-v2.html": {
+  "errs": [
+   "Failed to load worklet module script: blob:null/869bad70-c282-4fa2-8b3a-98f5cf45b940 (a dependency or cross-origin script failed to load)"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/geminis_webster.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/gemwabster2d-v2.html": {
+  "errs": [
+   "Failed to load worklet module script: blob:null/f8b2c24a-3808-4608-99c4-481c3054c528 (a dependency or cross-origin script failed to load)"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/grokwebster2d-v1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/halfweb-2.html": {
+  "errs": [
+   "Cannot read properties of undefined (reading 'currentTime')"
+  ],
+  "blockedRequests": 0
+ },
+ "webster/halfweb.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/kimi_tts.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/perp_tts.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/webster1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/webster2.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "webster/webster3.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "xinu/xinu-8e-v1.html": {
+  "errs": [],
+  "blockedRequests": 0
+ },
+ "xinu/xinu.html": {
+  "errs": [
+   "Failed to load resource: net::ERR_FAILED"
+  ],
+  "blockedRequests": 1
+ }
+}

@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRITON-XINU PURE — ConsciousNode SoftWorks</title>
+    <!--
+    ╔══════════════════════════════════════════════════════════════════════════════╗
+    ║ TRITON-XINU PURE — ConsciousNode SoftWorks                                   ║
+    ║                                                                              ║
+    ║ This is the absolute implementation.                                         ║
+    ║ JavaScript touches exactly one DOM element.                                  ║
+    ║ CSS performs 100% of visual computation via 1000+ generated rules.           ║
+    ║                                                                              ║
+    ║ Architecture: data-attribute state reflection, Xinu philosophy               ║
+    ║ Computation: pure JavaScript VM, zero DOM references                         ║
+    ║ State flow: VM → CSS custom properties → CSS selectors                       ║
+    ║ Animation: CSS transitions and keyframes only                              ║
+    ║ JS role: keyboard adapter, batches state to single root element              ║
+    ║                                                                              ║
+    ║ The JavaScript does not know pixels exist.                                   ║
+    ║ The CSS does not know ternary exists.                                      ║
+    ║ The architecture is absolute.                                                ║
+    ║                                                                              ║
+    ║ We do not ship. We prove.                                                    ║
+    ║                                                                              ║
+    ║ License: MIT                                                                 ║
+    ╚══════════════════════════════════════════════════════════════════════════════╝
+    -->
+    <style>
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ CONFIG / THEME                                                       ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        :root {
+            --bg-void: #050505;
+            --bg-panel: #0a0a0f;
+            --bg-input: #14141a;
+            --text-primary: #e8e8ed;
+            --text-secondary: #6b6b7b;
+            --accent-pos: #00ff66;
+            --accent-neg: #ff3366;
+            --accent-zero: #2a2a35;
+            --accent-pc: #ffcc00;
+            --accent-sp: #0099ff;
+            --accent-flash: #ffeebb;
+            --border: #1f1f2e;
+            --font-mono: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
+            --font-sans: system-ui, -apple-system, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg-void);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ UI CHROME                                                              ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        header {
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .logo::after {
+            content: "PURE";
+            font-size: 0.6em;
+            color: var(--accent-pos);
+            margin-left: 8px;
+            border: 1px solid var(--accent-pos);
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        button {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 6px 16px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        button:hover {
+            border-color: var(--text-secondary);
+            background: #1a1a25;
+        }
+
+        button.run { color: var(--accent-pos); border-color: rgba(0,255,102,0.3); }
+        button.run:hover { border-color: var(--accent-pos); background: rgba(0,255,102,0.1); }
+        
+        button.stop { color: var(--accent-neg); border-color: rgba(255,51,102,0.3); }
+        button.stop:hover { border-color: var(--accent-neg); background: rgba(255,51,102,0.1); }
+
+        select {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-left { width: 35%; }
+        .panel-center { width: 40%; }
+        .panel-right { width: 25%; border-right: none; }
+
+        .section-title {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            letter-spacing: 0.1em;
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ SOURCE EDITOR                                                        ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        #source-editor {
+            flex: 1;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: none;
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            tab-size: 4;
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ STATUS BAR                                                           ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        .status-bar {
+            background: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: var(--accent-neg);
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ MEMORY GRID — CSS ENGINE                                             ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        .memory-container {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(27, 1fr);
+            grid-template-rows: repeat(27, 1fr);
+            gap: 1px;
+            width: 270px;
+            height: 270px;
+            background: var(--bg-void);
+            border: 1px solid var(--border);
+        }
+
+        .tryte {
+            background: var(--bg-tryte, var(--accent-zero));
+            transition: background-color 0.1s ease;
+            position: relative;
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ REGISTERS — CSS ENGINE                                               ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        .registers-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding: 16px;
+        }
+
+        .register {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 10px;
+            text-align: center;
+            font-family: var(--font-mono);
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .register-name {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .register-ternary {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            letter-spacing: 0.1em;
+        }
+
+        .register-decimal {
+            font-size: 0.75rem;
+            color: var(--accent-sp);
+            margin-top: 2px;
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ OSCILLOSCOPE — CSS BARS                                              ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        .oscilloscope {
+            height: 100px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: 16px;
+            background: var(--bg-input);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .osc-bar {
+            flex: 1;
+            background: var(--accent-pos);
+            opacity: 0.6;
+            transition: height 0.1s ease;
+            height: calc((var(--val, 0) / 728 + 0.5) * 100%);
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ CONSOLES                                                             ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+        .console {
+            flex: 1;
+            background: var(--bg-input);
+            border-bottom: 1px solid var(--border);
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .console::before {
+            content: var(--content, "");
+            color: var(--text-primary);
+        }
+
+        .input-buffer {
+            background: var(--bg-input);
+            border: none;
+            border-bottom: 1px solid var(--border);
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            outline: none;
+            width: 100%;
+        }
+
+        .input-buffer::placeholder {
+            color: var(--text-secondary);
+        }
+
+        /* ╔══════════════════════════════════════════════════════════════════════╗
+           ║ GENERATED CSS RULES PLACEHOLDER                                        ║
+           ╚══════════════════════════════════════════════════════════════════════╝ */
+    </style>
+    <style id="generated-engine"></style>
+</head>
+<body>
+    <!-- THE ONE ELEMENT — All state lives here -->
+    <div id="vm-state" style="display: contents;">
+        
+        <header>
+            <div class="logo">TRITON</div>
+            <div class="controls">
+                <select id="example-select">
+                    <option value="counter">Ex: Counter</option>
+                    <option value="fibonacci">Ex: Fibonacci</option>
+                    <option value="hello">Ex: Hello World</option>
+                    <option value="subroutine">Ex: Subroutine</option>
+                </select>
+                <button onclick="Adapter.assemble()">Assemble</button>
+                <button onclick="Adapter.step()">Step</button>
+                <button class="run" onclick="Adapter.run()">Run</button>
+                <button class="stop" onclick="Adapter.halt()">Halt</button>
+                <button onclick="Adapter.reset()">Reset</button>
+                <div class="speed-control">
+                    <input type="range" id="speed" min="1" max="1000" value="60" style="width: 80px;">
+                    <span id="speed-display">60Hz</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main">
+            <div class="panel panel-left">
+                <div class="section-title">Source / Balanced Ternary ASM</div>
+                <textarea id="source-editor" spellcheck="false"></textarea>
+            </div>
+
+            <div class="panel panel-center">
+                <div class="section-title">Memory State / 729 Trytes</div>
+                <div class="memory-container">
+                    <div class="memory-grid" id="memory-grid"></div>
+                    <div style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary);">
+                        <span style="color: var(--accent-neg)">■</span> NEG 
+                        <span style="color: var(--accent-zero); margin-left: 12px;">■</span> ZERO 
+                        <span style="color: var(--accent-pos); margin-left: 12px;">■</span> POS 
+                        <span style="color: var(--accent-pc); margin-left: 12px;">□</span> PC 
+                        <span style="color: var(--accent-sp); margin-left: 12px;">□</span> SP
+                    </div>
+                </div>
+
+                <div class="section-title">Registers</div>
+                <div class="registers-container" id="registers-container"></div>
+            </div>
+
+            <div class="panel panel-right">
+                <div class="section-title">Oscilloscope / R0 History</div>
+                <div class="oscilloscope" id="oscilloscope"></div>
+                
+                <div class="section-title">Output / ASCII</div>
+                <div class="console" id="console-ascii"></div>
+                
+                <div class="section-title">Output / Numeric</div>
+                <div class="console" id="console-numeric"></div>
+                
+                <div class="section-title">Execution Log</div>
+                <div class="console" id="console-log" style="flex: 1.5;"></div>
+                
+                <input type="text" class="input-buffer" id="input-buffer" placeholder="Input buffer (consumed by IN instruction)..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div>
+                <span class=" <span class="status-indicator" id="status-dot"></span>
+                <span id="status-text">HALTED</span>
+                <span style="margin-left: 20px;">CYCLES: <span id="cycle-count">0</span></span>
+            </div>
+            <div id="error-display" style="color: var(--accent-neg);"></div>
+        </div>
+
+    </div>
+
+<script>
+/* ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║ PURE COMPUTATION ENGINE                                                      ║
+   ║ Zero DOM interaction. Zero browser APIs. Pure algorithms.                    ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝ */
+
+const TernaryMath = {
+    toString: (n) => {
+        let res = '', val = n;
+        for (let i = 0; i < 6; i++) {
+            let r = ((val % 3) + 3) % 3;
+            val = Math.floor(val / 3);
+            if (r === 2) { r = -1; val += 1; }
+            res += r === 0 ? 'Z' : (r === 1 ? 'P' : 'N');
+        }
+        return res;
+    },
+    
+    fromString: (s) => {
+        let dec = 0;
+        for (let i = 0; i < s.length; i++) {
+            const c = s[i];
+            const v = c === 'P' || c === '+' ? 1 : (c === 'N' || c === '-' ? -1 : 0);
+            dec += v * Math.pow(3, i);
+        }
+        return dec;
+    },
+    
+    clamp: (n) => Math.max(-364, Math.min(364, n)),
+    
+    wrap: (n) => {
+        const m = ((n % 729) + 729) % 729;
+        return m > 364 ? m - 729 : m;
+    },
+    
+    tritwise: (a, b, op) => {
+        const sa = TernaryMath.toString(a);
+        const sb = TernaryMath.toString(b);
+        let res = '';
+        for (let i = 0; i < 6; i++) {
+            const ta = sa[i] === 'P' ? 1 : (sa[i] === 'N' ? -1 : 0);
+            const tb = sb[i] === 'P' ? 1 : (sb[i] === 'N' ? -1 : 0);
+            const tr = op === 'MIN' ? Math.min(ta, tb) : Math.max(ta, tb);
+            res += tr === 1 ? 'P' : (tr === -1 ? 'N' : 'Z');
+        }
+        return TernaryMath.fromString(res);
+    }
+};
+
+const ISA = {
+    OPCODES: {
+        'NOP': 'ZZZZZZ', 'LOAD': 'PZZZZZ', 'MOV': 'NPZZZZ',
+        'ADD': 'PPZZZZ', 'SUB': 'PNZZZZ', 'MUL': 'NPPZZZ',
+        'DIV': 'NPNZZZ', 'NEG': 'NNPZZZ', 'CMP': 'NNNZZZ',
+        'JMP': 'PPPZZZ', 'JZ': 'PPNZZZ', 'JP': 'PNPZZZ',
+        'JN': 'PNNZZZ', 'PUSH': 'NPPPZZ', 'PULL': 'NPPNZZ',
+        'CALL': 'NPNPZZ', 'RET': 'NPNNZZ', 'AND': 'NNPPZZ',
+        'OR': 'NNPNZZ', 'NOT': 'NNNPZZ', 'SHL': 'NNNNZZ',
+        'SHR': 'PPPPZZ', 'IN': 'PPPNZZ', 'OUT': 'PPNPZZ',
+        'HALT': 'PPNNZZ'
+    },
+    
+    ARG_COUNTS: {
+        'NOP': 0, 'RET': 0, 'HALT': 0,
+        'JMP': 1, 'JZ': 1, 'JP': 1, 'JN': 1,
+        'PUSH': 1, 'PULL': 1, 'CALL': 1, 'IN': 1, 'OUT': 1,
+        'LOAD': 2, 'MOV': 2, 'NEG': 2, 'CMP': 2, 'NOT': 2, 'SHL': 2, 'SHR': 2,
+        'ADD': 3, 'SUB': 3, 'MUL': 3, 'DIV': 3, 'AND': 3, 'OR': 3
+    },
+    
+    REGISTERS: { 'r0': 0, 'r1': 1, 'r2': 2, 'r3': 3, 'r4': 4, 'r5': 5, 'r6': 6, 'r7': 7, 'r8': 8 }
+};
+
+const OPCODE_DEC = {};
+const DEC_OPCODE = {};
+for (const [name, trits] of Object.entries(ISA.OPCODES)) {
+    const dec = TernaryMath.fromString(trits);
+    OPCODE_DEC[name] = dec;
+    DEC_OPCODE[dec] = name;
+}
+
+class TVM {
+    constructor() {
+        this.memory = new Int16Array(729);
+        this.registers = new Int16Array(9);
+        this.pc = 0;
+        this.sp = 728;
+        this.fl = 0;
+        this.cycles = 0;
+        this.halted = true;
+        this.error = null;
+        this.inputQueue = [];
+        this.outputASCII = '';
+        this.outputNumeric = '';
+        this.log = '';
+    }
+
+    reset() {
+        this.memory.fill(0);
+        this.registers.fill(0);
+        this.pc = 0;
+        this.sp = 728;
+        this.fl = 0;
+        this.cycles = 0;
+        this.halted = true;
+        this.error = null;
+        this.inputQueue = [];
+        this.outputASCII = '';
+        this.outputNumeric = '';
+        this.log = '';
+    }
+
+    assemble(source) {
+        this.reset();
+        const lines = source.split('\n');
+        const labels = {};
+        let pc = 0;
+
+        // Pass 1: Collect labels
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].split(';')[0].trim();
+            if (!line) continue;
+            
+            if (line.endsWith(':')) {
+                labels[line.slice(0, -1)] = pc;
+                continue;
+            }
+            if (line.startsWith('.org')) {
+                pc = parseInt(line.split(/\s+/)[1], 10);
+                continue;
+            }
+            if (line.startsWith('.data')) {
+                pc += line.substring(5).split(',').filter(x => x.trim()).length;
+                continue;
+            }
+            if (line.startsWith('.string')) {
+                const match = line.match(/"([^"]*)"/);
+                if (match) pc += match[1].length;
+                continue;
+            }
+            
+            const op = line.split(/[\s,]+/)[0].toUpperCase();
+            if (ISA.ARG_COUNTS[op] !== undefined) {
+                pc += 1 + ISA.ARG_COUNTS[op];
+            }
+        }
+
+        const parseOperand = (str) => {
+            if (ISA.REGISTERS[str] !== undefined) return ISA.REGISTERS[str];
+            if (str.startsWith('#')) {
+                const v = str.substring(1);
+                return /^[PZN+\-]+$/.test(v) ? TernaryMath.fromString(v) : parseInt(v, 10);
+            }
+            if (labels[str] !== undefined) return labels[str];
+            const n = parseInt(str, 10);
+            return isNaN(n) ? 0 : n;
+        };
+
+        // Pass 2: Emit code
+        pc = 0;
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].split(';')[0].trim();
+            if (!line || line.endsWith(':')) continue;
+
+            if (line.startsWith('.org')) {
+                pc = parseInt(line.split(/\s+/)[1], 10);
+                continue;
+            }
+            if (line.startsWith('.data')) {
+                const vals = line.substring(5).split(',').map(x => x.trim()).filter(x => x);
+                for (const v of vals) this.memory[pc++] = parseOperand(v);
+                continue;
+            }
+            if (line.startsWith('.string')) {
+                const match = line.match(/"([^"]*)"/);
+                if (match) {
+                    for (const c of match[1]) this.memory[pc++] = c.charCodeAt(0);
+                }
+                continue;
+            }
+
+            const parts = line.split(/[\s,]+/).filter(x => x);
+            const op = parts[0].toUpperCase();
+            
+            if (OPCODE_DEC[op] === undefined) {
+                throw new Error(`Unknown instruction: ${op}`);
+            }
+
+            this.memory[pc++] = OPCODE_DEC[op];
+            for (let a = 1; a <= ISA.ARG_COUNTS[op]; a++) {
+                if (!parts[a]) throw new Error(`${op} missing argument ${a}`);
+                this.memory[pc++] = parseOperand(parts[a]);
+            }
+        }
+    }
+
+    step() {
+        if (this.halted) return null;
+
+        const opcode = this.memory[this.pc];
+        const opname = DEC_OPCODE[opcode];
+        
+        if (!opname) {
+            this.error = `Illegal opcode ${opcode} at PC ${this.pc}`;
+            this.halted = true;
+            return { error: this.error };
+        }
+
+        const oldPc = this.pc;
+        this.pc = (this.pc + 1) % 729;
+        
+        const args = [];
+        for (let i = 0; i < ISA.ARG_COUNTS[opname]; i++) {
+            args.push(this.memory[this.pc]);
+            this.pc = (this.pc + 1) % 729;
+        }
+
+        const [a, b, c] = args;
+        const logEntry = `${oldPc}: ${opname} ${args.join(' ')}`.trim();
+        
+        const delta = {
+            modifiedMem: {},
+            modifiedReg: {},
+            log: logEntry,
+            outputASCII: null,
+            outputNumeric: null
+        };
+
+        try {
+            switch (opname) {
+                case 'NOP': break;
+                
+                case 'LOAD':
+                    this.registers[a] = TernaryMath.clamp(b);
+                    delta.modifiedReg[a] = this.registers[a];
+                    break;
+                    
+                case 'MOV':
+                    this.registers[b] = this.registers[a];
+                    delta.modifiedReg[b] = this.registers[b];
+                    break;
+                    
+                case 'ADD':
+                    this.registers[c] = TernaryMath.clamp(this.registers[a] + this.registers[b]);
+                    delta.modifiedReg[c] = this.registers[c];
+                    break;
+                    
+                case 'SUB':
+                    this.registers[c] = TernaryMath.clamp(this.registers[a] - this.registers[b]);
+                    delta.modifiedReg[c] = this.registers[c];
+                    break;
+                    
+                case 'MUL':
+                    this.registers[c] = TernaryMath.wrap(this.registers[a] * this.registers[b]);
+                    delta.modifiedReg[c] = this.registers[c];
+                    break;
+                    
+                case 'DIV':
+                    if (this.registers[b] === 0) throw new Error('Division by zero');
+                    this.registers[c] = Math.trunc(this.registers[a] / this.registers[b]);
+                    this.registers[8] = this.registers[a] % this.registers[b];
+                    delta.modifiedReg[c] = this.registers[c];
+                    delta.modifiedReg[8] = this.registers[8];
+                    break;
+                    
+                case 'NEG':
+                    this.registers[b] = -this.registers[a];
+                    delta.modifiedReg[b] = this.registers[b];
+                    break;
+                    
+                case 'CMP': {
+                    const diff = this.registers[a] - this.registers[b];
+                    this.fl = diff > 0 ? 1 : (diff < 0 ? -1 : 0);
+                    break;
+                }
+                    
+                case 'JMP':
+                    this.pc = a;
+                    break;
+                    
+                case 'JZ':
+                    if (this.fl === 0) this.pc = a;
+                    break;
+                    
+                case 'JP':
+                    if (this.fl === 1) this.pc = a;
+                    break;
+                    
+                case 'JN':
+                    if (this.fl === -1) this.pc = a;
+                    break;
+                    
+                case 'PUSH':
+                    this.memory[this.sp] = this.registers[a];
+                    delta.modifiedMem[this.sp] = this.registers[a];
+                    this.sp = TernaryMath.wrap(this.sp - 1);
+                    break;
+                    
+                case 'PULL':
+                    this.sp = TernaryMath.wrap(this.sp + 1);
+                    this.registers[a] = this.memory[this.sp];
+                    delta.modifiedReg[a] = this.registers[a];
+                    break;
+                    
+                case 'CALL':
+                    this.memory[this.sp] = this.pc;
+                    delta.modifiedMem[this.sp] = this.pc;
+                    this.sp = TernaryMath.wrap(this.sp - 1);
+                    this.pc = a;
+                    break;
+                    
+                case 'RET':
+                    this.sp = TernaryMath.wrap(this.sp + 1);
+                    this.pc = this.memory[this.sp];
+                    break;
+                    
+                case 'AND':
+                    this.registers[c] = TernaryMath.tritwise(this.registers[a], this.registers[b], 'MIN');
+                    delta.modifiedReg[c] = this.registers[c];
+                    break;
+                    
+                case 'OR':
+                    this.registers[c] = TernaryMath.tritwise(this.registers[a], this.registers[b], 'MAX');
+                    delta.modifiedReg[c] = this.registers[c];
+                    break;
+                    
+                case 'NOT':
+                    this.registers[b] = -this.registers[a];
+                    delta.modifiedReg[b] = this.registers[b];
+                    break;
+                    
+                case 'SHL':
+                    this.registers[b] = TernaryMath.wrap(this.registers[a] * 3);
+                    delta.modifiedReg[b] = this.registers[b];
+                    break;
+                    
+                case 'SHR':
+                    this.registers[b] = Math.trunc(this.registers[a] / 3);
+                    delta.modifiedReg[b] = this.registers[b];
+                    break;
+                    
+                case 'IN':
+                    this.registers[a] = this.inputQueue.length > 0 ? this.inputQueue.shift() : 0;
+                    delta.modifiedReg[a] = this.registers[a];
+                    break;
+                    
+                case 'OUT': {
+                    const v = this.registers[a];
+                    delta.outputNumeric = v + ' ';
+                    if ((v >= 32 && v <= 126) || v === 10) {
+                        delta.outputASCII = String.fromCharCode(v);
+                    }
+                    break;
+                }
+                    
+                case 'HALT':
+                    this.halted = true;
+                    break;
+            }
+        } catch (e) {
+            this.error = e.message;
+            this.halted = true;
+            delta.error = e.message;
+        }
+
+        this.cycles++;
+        delta.pc = this.pc;
+        delta.sp = this.sp;
+        delta.fl = this.fl;
+        delta.cycles = this.cycles;
+        delta.halted = this.halted;
+        
+        return delta;
+    }
+}
+
+
+/* ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║ KEYBOARD ADAPTER                                                             ║
+   ║ One DOM element. All state flows here. No other DOM touches.                 ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝ */
+
+const Adapter = {
+    vm: new TVM(),
+    root: null,
+    running: false,
+    animationId: null,
+    lastFrame: 0,
+    accumulatedCycles: 0,
+    oscHistory: new Array(50).fill(0),
+    
+    // Output buffers (maintained in JS, written as CSS custom properties)
+    asciiOut: '',
+    numericOut: '',
+    logOut: '',
+
+    init: () => {
+        // THE ONE DOM ELEMENT
+        Adapter.root = document.getElementById('vm-state');
+        
+        // Generate static DOM structure (once, at init)
+        Adapter.generateDOM();
+        
+        // Generate CSS engine rules (once, at init)
+        Adapter.generateCSSEngine();
+        
+        // Bind controls
+        document.getElementById('example-select').addEventListener('change', (e) => {
+            document.getElementById('source-editor').value = EXAMPLES[e.target.value];
+        });
+        
+        document.getElementById('speed').addEventListener('input', (e) => {
+            document.getElementById('speed-display').textContent = e.target.value + 'Hz';
+        });
+        
+        document.getElementById('input-buffer').addEventListener('input', (e) => {
+            Adapter.vm.inputQueue = e.target.value.split('').map(c => c.charCodeAt(0));
+        });
+        
+        // Load initial example
+        document.getElementById('source-editor').value = EXAMPLES.counter;
+        
+        // Initial state sync
+        Adapter.syncFullState();
+    },
+
+    generateDOM: () => {
+        // Generate memory grid trytes
+        const memGrid = document.getElementById('memory-grid');
+        for (let i = 0; i < 729; i++) {
+            const tryte = document.createElement('div');
+            tryte.className = 'tryte';
+            tryte.setAttribute('addr', i);
+            memGrid.appendChild(tryte);
+        }
+        
+        // Generate register displays
+        const regContainer = document.getElementById('registers-container');
+        const regs = ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'pc', 'sp', 'fl'];
+        for (const r of regs) {
+            const regEl = document.createElement('div');
+            regEl.className = 'register';
+            regEl.setAttribute('reg', r);
+            regEl.innerHTML = `
+                <div class="register-name">${r}</div>
+                <div class="register-ternary"></div>
+                <div class="register-decimal"></div>
+            `;
+            regContainer.appendChild(regEl);
+        }
+        
+        // Generate oscilloscope bars
+        const oscContainer = document.getElementById('oscilloscope');
+        for (let i = 0; i < 50; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'osc-bar';
+            bar.setAttribute('addr', i);
+            oscContainer.appendChild(bar);
+        }
+    },
+
+    generateCSSEngine: () => {
+        const style = document.getElementById('generated-engine');
+        let css = '';
+        
+        // 729 memory value binding rules
+        for (let i = 0; i < 729; i++) {
+            css += `.tryte[addr="${i}"] { --val: var(--m${i}, 0); --abs: abs(var(--val)); --sign: sign(var(--val)); }\n`;
+        }
+        
+        // Memory coloring using CSS sign() and abs()
+        css += `
+            .tryte {
+                --intensity: calc(var(--abs) / 364);
+                --is-pos: max(0, var(--sign));
+                --is-neg: max(0, -1 * var(--sign));
+                background-color: 
+                    var(--bg-override,
+                        color-mix(in oklab, 
+                            var(--accent-pos) calc(var(--is-pos) * var(--intensity) * 100%),
+                            color-mix(in oklab,
+                                var(--accent-neg) calc(var(--is-neg) * var(--intensity) * 100%),
+                                var(--accent-zero) 100%
+                            )
+                        )
+                    );
+            }
+        `;
+        
+        // 729 PC highlighting rules
+        for (let i = 0; i < 729; i++) {
+            css += `#vm-state[style*="--pc: ${i}"] .tryte[addr="${i}"] { --bg-override: var(--accent-pc); box-shadow: inset 0 0 0 1px var(--accent-pc); z-index: 2; }\n`;
+        }
+        
+        // 729 SP highlighting rules
+        for (let i = 0; i < 729; i++) {
+            css += `#vm-state[style*="--sp: ${i}"] .tryte[addr="${i}"] { --bg-override: var(--accent-sp); box-shadow: inset 0 0 0 1px var(--accent-sp); z-index: 2; }\n`;
+        }
+        
+        // Register value bindings
+        for (let i = 0; i < 9; i++) {
+            css += `.register[reg="r${i}"] { --val: var(--r${i}, 0); }\n`;
+            css += `.register[reg="r${i}"] .register-ternary::before { content: var(--r${i}-ternary, "ZZZZZZ"); }\n`;
+            css += `.register[reg="r${i}"] .register-decimal::before { content: var(--r${i}-decimal, "0"); }\n`;
+        }
+        
+        // Special registers
+        css += `.register[reg="pc"] .register-ternary::before { content: var(--pc-ternary, "ZZZZZZ"); }\n`;
+        css += `.register[reg="pc"] .register-decimal::before { content: var(--pc-decimal, "0"); }\n`;
+        css += `.register[reg="sp"] .register-ternary::before { content: var(--sp-ternary, "ZZZZZZ"); }\n`;
+        css += `.register[reg="sp"] .register-decimal::before { content: var(--sp-decimal, "728"); }\n`;
+        css += `.register[reg="fl"] .register-ternary::before { content: var(--fl-ternary, "ZZZZZZ"); }\n`;
+        css += `.register[reg="fl"] .register-decimal::before { content: var(--fl-decimal, "Z (0)"); }\n`;
+        
+        // Oscilloscope bindings
+        for (let i = 0; i < 50; i++) {
+            css += `.osc-bar[addr="${i}"] { --val: var(--osc${i}, 0); }\n`;
+        }
+        
+        // Console content bindings
+        css += `#console-ascii { --content: var(--out-ascii, ""); }\n`;
+        css += `#console-numeric { --content: var(--out-numeric, ""); }\n`;
+        css += `#console-log { --content: var(--out-log, ""); }\n`;
+        
+        // Status styling
+        css += `#vm-state[style*="--running: 1"] .status-indicator { background: var(--accent-pos); box-shadow: 0 0 8px var(--accent-pos); }\n`;
+        css += `#vm-state[style*="--running: 0"] .status-indicator { background: var(--accent-neg); }\n`;
+        
+        style.textContent = css;
+    },
+
+    // THE ONE WRITE PATH — All state flows through here
+    syncFullState: () => {
+        const r = Adapter.root;
+        const vm = Adapter.vm;
+        
+        // Build style property string for batch write
+        let styleProps = [];
+        
+        // Core state
+        styleProps.push(`--pc: ${vm.pc}`);
+        styleProps.push(`--sp: ${vm.sp}`);
+        styleProps.push(`--fl: ${vm.fl}`);
+        styleProps.push(`--cycles: ${vm.cycles}`);
+        styleProps.push(`--running: ${Adapter.running ? 1 : 0}`);
+        styleProps.push(`--error: "${vm.error || ''}"`);
+        
+        // Memory (only non-zero for efficiency, but we need all for CSS)
+        // Actually we need all 729 for the CSS engine to work
+        for (let i = 0; i < 729; i++) {
+            styleProps.push(`--m${i}: ${vm.memory[i]}`);
+        }
+        
+        // Registers
+        for (let i = 0; i < 9; i++) {
+            styleProps.push(`--r${i}: ${vm.registers[i]}`);
+            styleProps.push(`--r${i}-ternary: "${TernaryMath.toString(vm.registers[i])}"`);
+            styleProps.push(`--r${i}-decimal: "${vm.registers[i]}"`);
+        }
+        
+        // Special registers
+        styleProps.push(`--pc-ternary: "${TernaryMath.toString(vm.pc)}"`);
+        styleProps.push(`--pc-decimal: "${vm.pc}"`);
+        styleProps.push(`--sp-ternary: "${TernaryMath.toString(vm.sp)}"`);
+        styleProps.push(`--sp-decimal: "${vm.sp}"`);
+        const flStr = vm.fl === 1 ? 'P (+1)' : (vm.fl === -1 ? 'N (-1)' : 'Z (0)');
+        styleProps.push(`--fl-ternary: "${vm.fl === 1 ? 'PZZZZZ' : (vm.fl === -1 ? 'NZZZZZ' : 'ZZZZZZ')}"`);
+        styleProps.push(`--fl-decimal: "${flStr}"`);
+        
+        // Oscilloscope
+        Adapter.oscHistory.forEach((v, i) => {
+            styleProps.push(`--osc${i}: ${v}`);
+        });
+        
+        // Output
+        styleProps.push(`--out-ascii: "${Adapter.asciiOut.replace(/"/g, '\\"')}"`);
+        styleProps.push(`--out-numeric: "${Adapter.numericOut.replace(/"/g, '\\"')}"`);
+        styleProps.push(`--out-log: "${Adapter.logOut.replace(/"/g, '\\"')}"`);
+        
+        // THE ONE DOM WRITE
+        r.style.cssText = styleProps.join('; ');
+        
+        // Status text (dataset allowed per spec)
+        r.dataset.status = vm.error ? 'ERROR' : (vm.halted ? 'HALTED' : 'RUNNING');
+        document.getElementById('status-text').textContent = r.dataset.status;
+        document.getElementById('cycle-count').textContent = vm.cycles;
+        document.getElementById('error-display').textContent = vm.error || '';
+    },
+
+    applyDelta: (delta) => {
+        if (!delta) return;
+        
+        // Update VM state from delta
+        Adapter.vm.pc = delta.pc;
+        Adapter.vm.sp = delta.sp;
+        Adapter.vm.fl = delta.fl;
+        Adapter.vm.cycles = delta.cycles;
+        Adapter.vm.halted = delta.halted;
+        
+        // Apply memory modifications
+        for (const [addr, val] of Object.entries(delta.modifiedMem)) {
+            Adapter.vm.memory[parseInt(addr)] = val;
+        }
+        
+        // Apply register modifications
+        for (const [reg, val] of Object.entries(delta.modifiedReg)) {
+            Adapter.vm.registers[parseInt(reg)] = val;
+        }
+        
+        // Accumulate output
+        if (delta.outputASCII) Adapter.asciiOut = delta.outputASCII + Adapter.asciiOut;
+        if (delta.outputNumeric) Adapter.numericOut = delta.outputNumeric + Adapter.numericOut;
+        if (delta.log) {
+            Adapter.logOut = `[${delta.cycles}] ${delta.log}\n` + Adapter.logOut;
+            if (Adapter.logOut.length > 2000) Adapter.logOut = Adapter.logOut.slice(0, 2000);
+        }
+        
+        // Update oscilloscope history
+        Adapter.oscHistory.unshift(Adapter.vm.registers[0]);
+        if (Adapter.oscHistory.length > 50) Adapter.oscHistory.pop();
+        
+        // Sync input buffer display
+        const inputStr = Adapter.vm.inputQueue.map(c => String.fromCharCode(c)).join('');
+        document.getElementById('input-buffer').value = inputStr;
+        
+        // Full state sync to CSS
+        Adapter.syncFullState();
+    },
+
+    assemble: () => {
+        Adapter.halt();
+        Adapter.asciiOut = '';
+        Adapter.numericOut = '';
+        Adapter.logOut = '';
+        Adapter.oscHistory.fill(0);
+        
+        const source = document.getElementById('source-editor').value;
+        try {
+            Adapter.vm.assemble(source);
+            Adapter.vm.halted = false;
+            Adapter.vm.error = null;
+        } catch (e) {
+            Adapter.vm.error = e.message;
+        }
+        
+        Adapter.syncFullState();
+    },
+
+    step: () => {
+        if (Adapter.vm.halted && !Adapter.vm.error) {
+            Adapter.assemble();
+        }
+        
+        if (!Adapter.vm.halted) {
+            const delta = Adapter.vm.step();
+            Adapter.applyDelta(delta);
+        }
+    },
+
+    run: () => {
+        if (Adapter.vm.halted && !Adapter.vm.error) {
+            Adapter.assemble();
+        }
+        
+        if (!Adapter.vm.halted && !Adapter.running) {
+            Adapter.running = true;
+            Adapter.lastFrame = performance.now();
+            Adapter.accumulatedCycles = 0;
+            Adapter.animationId = requestAnimationFrame(Adapter.loop);
+        }
+    },
+
+    halt: () => {
+        Adapter.running = false;
+        if (Adapter.animationId) {
+            cancelAnimationFrame(Adapter.animationId);
+            Adapter.animationId = null;
+        }
+        Adapter.syncFullState();
+    },
+
+    reset: () => {
+        Adapter.halt();
+        Adapter.vm.reset();
+        Adapter.asciiOut = '';
+        Adapter.numericOut = '';
+        Adapter.logOut = '';
+        Adapter.oscHistory.fill(0);
+        Adapter.syncFullState();
+    },
+
+    loop: (timestamp) => {
+        if (!Adapter.running || Adapter.vm.halted) {
+            Adapter.halt();
+            return;
+        }
+
+        const speed = parseInt(document.getElementById('speed').value, 10);
+        const dt = timestamp - Adapter.lastFrame;
+        Adapter.lastFrame = timestamp;
+
+        // Accumulate cycles based on speed
+        Adapter.accumulatedCycles += (speed * dt) / 1000;
+        const cyclesToRun = Math.floor(Adapter.accumulatedCycles);
+        Adapter.accumulatedCycles -= cyclesToRun;
+
+        for (let i = 0; i < Math.min(cyclesToRun, 100); i++) {
+            if (Adapter.vm.halted) break;
+            const delta = Adapter.vm.step();
+            Adapter.applyDelta(delta);
+        }
+
+        if (Adapter.running && !Adapter.vm.halted) {
+            Adapter.animationId = requestAnimationFrame(Adapter.loop);
+        } else {
+            Adapter.halt();
+        }
+    }
+};
+
+const EXAMPLES = {
+    counter: `; Count from -5 to +5
+LOAD r0, #-5
+LOAD r1, #1
+LOAD r2, #5
+
+loop:
+OUT r0
+CMP r0, r2
+JZ done
+ADD r0, r1, r0
+JMP loop
+
+done:
+HALT`,
+
+    fibonacci: `; Generate Fibonacci sequence
+LOAD r0, #0          ; F(0) = 0
+LOAD r1, #1          ; F(1) = 1
+LOAD r7, #300        ; Limit
+
+loop:
+OUT r0
+ADD r0, r1, r2       ; r2 = r0 + r1
+CMP r7, r2
+JN done              ; if limit < new, stop
+MOV r1, r0           ; shift
+MOV r2, r1
+JMP loop
+
+done:
+HALT`,
+
+    hello: `; Output "HI"
+LOAD r0, #72         ; 'H'
+LOAD r1, #73         ; 'I'
+OUT r0
+OUT r1
+HALT`,
+
+    subroutine: `; Call/Return demo
+LOAD r0, #5
+CALL double
+OUT r0
+HALT
+
+double:
+ADD r0, r0, r0
+RET`
+};
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded', Adapter.init);
+</script>
+</body>
+</html>

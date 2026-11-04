@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QR Blaster | ConsciousNode SoftWorks</title>
+<style>
+    /* ╔══════════════════════════╗
+       ║          STYLES          ║
+       ╚══════════════════════════╝ */
+    :root {
+        --bg: #000000;
+        --fg: #ffffff;
+        --accent: #00ff00;
+        --error: #ff0044;
+        --dim: #333333;
+        --font: 'Courier New', Courier, monospace;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+        background-color: var(--bg);
+        color: var(--fg);
+        font-family: var(--font);
+        line-height: 1.4;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+        overflow-x: hidden;
+    }
+
+    header { margin-bottom: 30px; border-bottom: 2px solid var(--dim); padding-bottom: 10px; }
+    h1 { font-size: 2rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+    h1 span { color: var(--accent); }
+    .tagline { color: var(--dim); font-size: 0.9rem; margin-top: 5px; }
+    .animal { font-style: italic; color: #888; }
+
+    .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
+    button {
+        background: var(--bg); color: var(--fg); border: 2px solid var(--fg);
+        padding: 10px 20px; font-family: var(--font); font-weight: bold; font-size: 1.1rem;
+        cursor: pointer; text-transform: uppercase; transition: all 0.1s;
+        flex: 1;
+    }
+    button:hover { background: var(--fg); color: var(--bg); }
+    button:active { transform: translateY(2px); }
+    button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    
+    .panel { display: none; border: 1px solid var(--dim); padding: 15px; background: #0a0a0a; }
+    .panel.active { display: block; }
+
+    textarea {
+        width: 100%; height: 200px; background: var(--bg); color: var(--accent);
+        border: 1px solid var(--dim); padding: 10px; font-family: var(--font);
+        resize: vertical; margin-bottom: 15px; outline: none;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    /* QR Blasting Canvas */
+    #qr-container { display: flex; justify-content: center; margin: 20px 0; background: var(--bg); padding: 20px; border: 1px solid var(--dim); }
+    #qr-canvas { image-rendering: pixelated; }
+
+    /* Camera Receiving */
+    #camera-container {
+        position: relative; width: 100%; max-width: 640px; margin: 0 auto 20px auto;
+        border: 2px solid var(--dim); aspect-ratio: 4/3; background: #111; overflow: hidden;
+    }
+    #camera-video { width: 100%; height: 100%; object-fit: cover; }
+    #camera-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        box-shadow: inset 0 0 0 2px rgba(0, 255, 0, 0.5); pointer-events: none;
+    }
+
+    .status-bar {
+        padding: 10px; background: var(--dim); font-weight: bold; margin-bottom: 15px;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-bar.error { background: var(--error); color: white; }
+    .status-bar.success { background: var(--accent); color: black; }
+
+    .progress-wrapper { width: 100%; height: 20px; background: #222; margin-top: 10px; border: 1px solid var(--dim); }
+    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+
+    .missing-chunks { color: var(--error); font-size: 0.9rem; margin-top: 10px; }
+    .footer { margin-top: 40px; font-size: 0.8rem; color: var(--dim); text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+    <h1><span>💥</span> QR BLASTER</h1>
+    <div class="tagline">No WiFi. No Bluetooth. No excuses.</div>
+    <div class="animal">It uses light. Like an animal.</div>
+</header>
+
+<div class="btn-group">
+    <button id="btn-mode-blast" class="active">BLAST IT</button>
+    <button id="btn-mode-receive">RECEIVE</button>
+</div>
+
+<div id="secure-warning" style="display:none; color: var(--error); font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
+    ⚠️ Camera access requires HTTPS or localhost
+</div>
+
+<!-- ╔══════════════════════════╗
+     ║        BLAST UI          ║
+     ╚══════════════════════════╝ -->
+<div id="panel-blast" class="panel active">
+    <p style="margin-bottom: 10px;">Enter JSON or raw text to blast:</p>
+    <textarea id="blast-input" placeholder='{"message": "Enter your payload here..."}'></textarea>
+    <button id="btn-start-blast" style="width: 100%; border-color: var(--accent); color: var(--accent);">ENGAGE BLASTER</button>
+    
+    <div id="blast-running-ui" style="display: none; margin-top: 20px;">
+        <div class="status-bar">
+            <span id="blast-status-text">Blasting...</span>
+            <button id="btn-stop-blast" style="flex: 0 1 auto; padding: 5px 10px; border-color: var(--error); color: var(--error);">HALT</button>
+        </div>
+        <div class="progress-wrapper"><div id="blast-progress" class="progress-fill"></div></div>
+        <div id="qr-container">
+            <canvas id="qr-canvas"></canvas>
+        </div>
+        <p style="text-align: center; color: var(--dim); font-size: 0.9rem;">Keep this screen visible to the receiving camera.</p>
+    </div>
+</div>
+
+<!-- ╔══════════════════════════╗
+     ║       RECEIVE UI         ║
+     ╚══════════════════════════╝ -->
+<div id="panel-receive" class="panel">
+    <div id="receive-idle-ui">
+        <p style="margin-bottom: 15px;">Point your camera at a blasting screen to receive data.</p>
+        <button id="btn-start-receive" style="width: 100%; border-color: var(--accent); color: var(--accent);">OPEN CAMERA & SCAN</button>
+    </div>
+
+    <div id="receive-running-ui" style="display: none;">
+        <div id="camera-container">
+            <video id="camera-video" playsinline muted autoplay></video>
+            <div id="camera-overlay"></div>
+        </div>
+        <div class="status-bar" id="receive-status-bar">
+            <span id="receive-status-text">Waiting for light...</span>
+            <span id="receive-counter">0 / 0</span>
+        </div>
+        <div class="progress-wrapper"><div id="receive-progress" class="progress-fill"></div></div>
+        <div id="missing-chunks-display" class="missing-chunks"></div>
+    </div>
+
+    <div id="receive-complete-ui" style="display: none; margin-top: 20px;">
+        <div class="status-bar success">TRANSFER COMPLETE.</div>
+        <textarea id="receive-output" readonly></textarea>
+        <button id="btn-copy-output" style="width: 100%;">COPY TO CLIPBOARD</button>
+    </div>
+</div>
+
+<div class="footer">ConsciousNode SoftWorks // Alpha Release</div>
+
+<script>
+// ╔══════════════════════════╗
+// ║          CONFIG          ║
+// ╚══════════════════════════╝
+const CONFIG = {
+    PROTOCOL_VERSION: 1,
+    CHUNK_PAYLOAD_BYTES: 800,
+    ANIMATION_MS: 200,
+    HEADER_REPEAT: 3,
+    CAMERA_WIDTH: 640,
+    CAMERA_HEIGHT: 480,
+    AUDIO_BEEP_HZ: 880,
+    AUDIO_COMPLETE_HZ: [523, 659, 784],
+    AUDIO_ERROR_HZ: 150,
+    QR_DISPLAY_SIZE: 350
+};
+
+// ╔══════════════════════════╗
+// ║      STATE MACHINE       ║
+// ╚══════════════════════════╝
+const STATE = { IDLE: 0, BLASTING: 1, RECEIVING: 2, COMPLETE: 3, ERROR: 4 };
+let currentState = STATE.IDLE;
+
+const Bus = {
+    _l: {},
+    on(e, fn) { (this._l[e] ||= []).push(fn) },
+    emit(e, d) { (this._l[e] || []).forEach(fn => fn(d)) }
+};
+
+function transitionTo(newState, data = null) {
+    currentState = newState;
+    Bus.emit('state_change', { state: newState, data });
+}
+
+// ╔══════════════════════════╗
+// ║    FORMAT ADAPTERS       ║
+// ╚══════════════════════════╝
+const FORMAT_RAW = {
+    id: 'raw',
+    label: 'Raw JSON / Text',
+    serialize: data => new TextEncoder().encode(JSON.stringify(data)),
+    deserialize: bytes => {
+        const text = new TextDecoder().decode(bytes);
+        try { return JSON.parse(text); } catch(e) { return text; }
+    },
+    validate: () => true
+};
+const FORMATS = [FORMAT_RAW]; // Plug-in point for future formats
+
+// ╔══════════════════════════╗
+// ║          UTILS           ║
+// ╚══════════════════════════╝
+function setupCanvas(canvas, cssWidth, cssHeight) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = cssWidth + 'px';
+    canvas.style.height = cssHeight + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+function bytesToBase64(bytes) {
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) { binary += String.fromCharCode(bytes[i]); }
+    return window.btoa(binary);
+}
+
+function base64ToBytes(base64) {
+    const binary = window.atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) { bytes[i] = binary.charCodeAt(i); }
+    return bytes;
+}
+
+// CCITT-FALSE CRC16
+function crc16(data) {
+    let crc = 0xFFFF;
+    for (let i = 0; i < data.length; i++) {
+        crc ^= data[i] << 8;
+        for (let j = 0; j < 8; j++) {
+            crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+        }
+    }
+    return crc & 0xFFFF;
+}
+
+// ╔══════════════════════════╗
+// ║          AUDIO           ║
+// ╚══════════════════════════╝
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(hz, duration, type='sine') {
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = hz;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+    } catch (e) { /* Ignore audio failures silently */ }
+}
+
+function playSuccess() { beep(CONFIG.AUDIO_BEEP_HZ, 0.1, 'square'); }
+function playError() { 
+    beep(330, 0.2, 'sine');
+    setTimeout(() => beep(220, 0.3, 'sine'), 200);
+}
+function playComplete() {
+    CONFIG.AUDIO_COMPLETE_HZ.forEach((hz, i) => {
+        setTimeout(() => beep(hz, 0.15, 'square'), i * 150);
+    });
+}
+
+// ╔══════════════════════════╗
+// ║        PROTOCOL          ║
+// ╚══════════════════════════╝
+// [1:Version][2:Index][2:Total][2:CRC16][N:Payload]
+async function encodeData(dataStr) {
+    let payloadBytes = new TextEncoder().encode(dataStr);
+    let isCompressed = false;
+
+    // Optional Compression
+    if (window.CompressionStream) {
+        try {
+            const stream = new Blob([payloadBytes]).stream().pipeThrough(new CompressionStream('gzip'));
+            payloadBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+            isCompressed = true;
+        } catch (e) { console.warn("Compression failed, using raw."); }
+    }
+
+    // Wrap in standard format adapter shape even if string
+    const finalPayload = new Uint8Array(1 + payloadBytes.length);
+    finalPayload[0] = isCompressed ? 1 : 0; // Prepend compression flag
+    finalPayload.set(payloadBytes, 1);
+
+    const chunks = [];
+    const totalChunks = Math.ceil(finalPayload.length / CONFIG.CHUNK_PAYLOAD_BYTES);
+
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * CONFIG.CHUNK_PAYLOAD_BYTES;
+        const end = Math.min(start + CONFIG.CHUNK_PAYLOAD_BYTES, finalPayload.length);
+        const chunkPayload = finalPayload.slice(start, end);
+
+        const chunk = new Uint8Array(7 + chunkPayload.length);
+        const view = new DataView(chunk.buffer);
+
+        view.setUint8(0, CONFIG.PROTOCOL_VERSION);
+        view.setUint16(1, i, false);
+        view.setUint16(3, totalChunks, false);
+        chunk.set(chunkPayload, 7);
+        
+        // Zero CRC field before calculation
+        view.setUint16(5, 0, false);
+        const crc = crc16(chunk);
+        view.setUint16(5, crc, false);
+
+        chunks.push(bytesToBase64(chunk));
+    }
+    return chunks;
+}
+
+// ╔══════════════════════════╗
+// ║        QR ENGINE         ║
+// ╚══════════════════════════╝
+let blastInterval = null;
+
+function renderQRToCanvas(b64Data, canvas, cssSize) {
+    const ctx = canvas.getContext('2d');
+
+    if (!window.qrcode) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, cssSize, cssSize);
+        ctx.fillStyle = '#ff0044';
+        ctx.font = '14px Courier New';
+        ctx.fillText('QR ENGINE OFFLINE', 20, cssSize/2);
+        console.error('qrcode-generator not loaded');
+        return;
+    }
+
+    try {
+        const qr = qrcode(0, 'L');
+        qr.addData(b64Data);
+        qr.make();
+
+        const modules = qr.getModuleCount();
+        const tileSize = cssSize / modules;
+
+        ctx.fillStyle = '#000000'; // Dark mode bg
+        ctx.fillRect(0, 0, cssSize, cssSize);
+        ctx.fillStyle = '#ffffff'; // White QR modules
+
+        for (let row = 0; row < modules; row++) {
+            for (let col = 0; col < modules; col++) {
+                if (qr.isDark(row, col)) {
+                    // Draw slightly larger to prevent subpixel grid lines
+                    ctx.fillRect(Math.floor(col * tileSize), Math.floor(row * tileSize), Math.ceil(tileSize), Math.ceil(tileSize));
+                }
+            }
+        }
+    } catch (e) {
+        console.error("QR Generation failed", e);
+    }
+}
+
+function startBlasting(chunks) {
+    transitionTo(STATE.BLASTING);
+    const canvas = document.getElementById('qr-canvas');
+    const size = CONFIG.QR_DISPLAY_SIZE;
+    setupCanvas(canvas, size, size);
+
+    // Prepare sequence: Repeat first chunk 3 times for receiver sync
+    let sequence = [];
+    for(let i=0; i<CONFIG.HEADER_REPEAT; i++) sequence.push(chunks[0]);
+    sequence = sequence.concat(chunks);
+
+    let frame = 0;
+    
+    if (blastInterval) clearInterval(blastInterval);
+    blastInterval = setInterval(() => {
+        if (currentState !== STATE.BLASTING) return clearInterval(blastInterval);
+
+        const chunkData = sequence[frame % sequence.length];
+        renderQRToCanvas(chunkData, canvas, size);
+        
+        // Calculate actual index for UI (ignore duplicate headers)
+        let actualIndex = (frame % sequence.length) - CONFIG.HEADER_REPEAT;
+        if (actualIndex < 0) actualIndex = 0;
+
+        Bus.emit('blast_progress', { current: actualIndex + 1, total: chunks.length });
+        frame++;
+    }, CONFIG.ANIMATION_MS);
+}
+
+function stopBlasting() {
+    if (blastInterval) clearInterval(blastInterval);
+    transitionTo(STATE.IDLE);
+}
+
+// ╔══════════════════════════╗
+// ║      CAMERA / JSQR       ║
+// ╚══════════════════════════╝
+let videoStream = null;
+const offscreenCanvas = document.createElement('canvas');
+offscreenCanvas.width = CONFIG.CAMERA_WIDTH;
+offscreenCanvas.height = CONFIG.CAMERA_HEIGHT;
+const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
+let receiveBuffer = [];
+let expectedChunks = 0;
+let receivedCount = 0;
+
+async function startReceiving() {
+    initAudio();
+    
+    // Check secure context first
+    if (!window.isSecureContext) {
+        Bus.emit('receive_error', 
+            "Camera requires HTTPS or localhost. Open this file via a local web server " +
+            "(e.g. python3 -m http.server) or host it on HTTPS. content:// and file:// " +
+            "won't work for camera access.");
+        transitionTo(STATE.ERROR);
+        return;
+    }
+
+    receiveBuffer = [];
+    expectedChunks = 0;
+    receivedCount = 0;
+    
+    transitionTo(STATE.RECEIVING);
+    
+    const video = document.getElementById('camera-video');
+    try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment', width: { ideal: CONFIG.CAMERA_WIDTH }, height: { ideal: CONFIG.CAMERA_HEIGHT } } 
+        });
+        video.srcObject = videoStream;
+        video.play();
+        requestAnimationFrame(scanLoop);
+    } catch (e) {
+        Bus.emit('receive_error', "Camera access denied. QR Blaster respects your privacy but also needs your camera. Please reconsider.");
+        transitionTo(STATE.ERROR);
+    }
+}
+
+function stopReceiving() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(t => t.stop());
+        videoStream = null;
+    }
+}
+
+function scanLoop() {
+    if (currentState !== STATE.RECEIVING) return;
+    
+    const video = document.getElementById('camera-video');
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (!window.jsQR) {
+            Bus.emit('receive_error', "Scanner engine not loaded. QR Blaster is having a bad time.");
+            transitionTo(STATE.ERROR);
+            return;
+        }
+        offscreenCtx.drawImage(video, 0, 0, CONFIG.CAMERA_WIDTH, CONFIG.CAMERA_HEIGHT);
+        const imageData = offscreenCtx.getImageData(0, 0, CONFIG.CAMERA_WIDTH, CONFIG.CAMERA_HEIGHT);
+        
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+        if (code && code.data) {
+            handleScannedQR(code.data);
+        }
+    }
+    requestAnimationFrame(scanLoop);
+}
+
+function handleScannedQR(b64Str) {
+    try {
+        const chunk = base64ToBytes(b64Str);
+        const view = new DataView(chunk.buffer);
+
+        const version = view.getUint8(0);
+        if (version !== CONFIG.PROTOCOL_VERSION) return; // Not our protocol
+
+        const index = view.getUint16(1, false);
+        const total = view.getUint16(3, false);
+        const receivedCrc = view.getUint16(5, false);
+
+        // Verify CRC
+        view.setUint16(5, 0, false); // Zero it out to check
+        if (crc16(chunk) !== receivedCrc) return; // Corrupt chunk
+
+        const payload = chunk.slice(7);
+
+        if (expectedChunks === 0) {
+            expectedChunks = total;
+            receiveBuffer = new Array(total).fill(null);
+        }
+
+        if (expectedChunks !== total) return; // Crossed streams with another blaster? Ignore.
+
+        if (!receiveBuffer[index]) {
+            receiveBuffer[index] = payload;
+            receivedCount++;
+            playSuccess();
+            Bus.emit('chunk_received', { index, total, receivedCount });
+
+            if (receivedCount === expectedChunks) {
+                assembleAndDecode();
+            }
+        }
+    } catch (e) {
+        // Silent catch for bad/unrelated QR codes
+    }
+}
+
+async function assembleAndDecode() {
+    stopReceiving();
+    
+    const totalLen = receiveBuffer.reduce((sum, b) => sum + b.length, 0);
+    const fullData = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const b of receiveBuffer) {
+        fullData.set(b, offset);
+        offset += b.length;
+    }
+
+    const isCompressed = fullData[0] === 1;
+    let payload = fullData.slice(1);
+
+    if (isCompressed && window.DecompressionStream) {
+        try {
+            const stream = new Blob([payload]).stream().pipeThrough(new DecompressionStream('gzip'));
+            payload = new Uint8Array(await new Response(stream).arrayBuffer());
+        } catch (e) {
+            console.error("Decompression failed", e);
+            Bus.emit('receive_error', "Data was compressed but extraction failed. RIP.");
+            return;
+        }
+    }
+
+    const jsonStr = new TextDecoder().decode(payload);
+    playComplete();
+    transitionTo(STATE.COMPLETE, jsonStr);
+}
+
+// ╔══════════════════════════╗
+// ║           UI             ║
+// ╚══════════════════════════╝
+const els = {
+    btnBlastMode: document.getElementById('btn-mode-blast'),
+    btnReceiveMode: document.getElementById('btn-mode-receive'),
+    panelBlast: document.getElementById('panel-blast'),
+    panelReceive: document.getElementById('panel-receive'),
+    
+    // Blast UI
+    blastInput: document.getElementById('blast-input'),
+    btnStartBlast: document.getElementById('btn-start-blast'),
+    btnStopBlast: document.getElementById('btn-stop-blast'),
+    blastRunningUi: document.getElementById('blast-running-ui'),
+    blastProgress: document.getElementById('blast-progress'),
+    blastStatusText: document.getElementById('blast-status-text'),
+    
+    // Receive UI
+    btnStartReceive: document.getElementById('btn-start-receive'),
+    receiveIdleUi: document.getElementById('receive-idle-ui'),
+    receiveRunningUi: document.getElementById('receive-running-ui'),
+    receiveCompleteUi: document.getElementById('receive-complete-ui'),
+    receiveProgress: document.getElementById('receive-progress'),
+    receiveCounter: document.getElementById('receive-counter'),
+    missingChunksDisplay: document.getElementById('missing-chunks-display'),
+    receiveOutput: document.getElementById('receive-output'),
+    btnCopyOutput: document.getElementById('btn-copy-output'),
+    receiveStatusBar: document.getElementById('receive-status-bar'),
+    receiveStatusText: document.getElementById('receive-status-text')
+};
+
+function switchMode(mode) {
+    if (currentState === STATE.BLASTING) stopBlasting();
+    if (currentState === STATE.RECEIVING) stopReceiving();
+    transitionTo(STATE.IDLE);
+
+    if (mode === 'blast') {
+        els.btnBlastMode.classList.add('active');
+        els.btnReceiveMode.classList.remove('active');
+        els.panelBlast.classList.add('active');
+        els.panelReceive.classList.remove('active');
+        els.btnStartBlast.style.display = 'block';
+        els.blastRunningUi.style.display = 'none';
+        els.blastInput.style.display = 'block';
+    } else {
+        els.btnBlastMode.classList.remove('active');
+        els.btnReceiveMode.classList.add('active');
+        els.panelBlast.classList.remove('active');
+        els.panelReceive.classList.add('active');
+        els.receiveIdleUi.style.display = 'block';
+        els.receiveRunningUi.style.display = 'none';
+        els.receiveCompleteUi.style.display = 'none';
+    }
+}
+
+els.btnBlastMode.addEventListener('click', () => switchMode('blast'));
+els.btnReceiveMode.addEventListener('click', () => switchMode('receive'));
+
+els.btnStartBlast.addEventListener('click', async () => {
+    const text = els.blastInput.value.trim();
+    if (!text) return alert("Nothing to blast. Enter some data.");
+    
+    els.btnStartBlast.style.display = 'none';
+    els.blastInput.style.display = 'none';
+    els.blastRunningUi.style.display = 'block';
+    els.blastStatusText.textContent = "Encoding data...";
+    
+    const chunks = await encodeData(text);
+    startBlasting(chunks);
+});
+
+els.btnStopBlast.addEventListener('click', () => {
+    stopBlasting();
+    els.btnStartBlast.style.display = 'block';
+    els.blastInput.style.display = 'block';
+    els.blastRunningUi.style.display = 'none';
+});
+
+els.btnStartReceive.addEventListener('click', () => {
+    els.receiveIdleUi.style.display = 'none';
+    els.receiveRunningUi.style.display = 'block';
+    els.receiveCompleteUi.style.display = 'none';
+    els.receiveStatusBar.className = 'status-bar';
+    els.receiveStatusText.textContent = "Waiting for light...";
+    els.receiveProgress.style.width = '0%';
+    els.receiveCounter.textContent = '0 / 0';
+    els.missingChunksDisplay.textContent = '';
+    startReceiving();
+});
+
+els.btnCopyOutput.addEventListener('click', () => {
+    els.receiveOutput.select();
+    document.execCommand('copy');
+    els.btnCopyOutput.textContent = "COPIED!";
+    setTimeout(() => els.btnCopyOutput.textContent = "COPY TO CLIPBOARD", 2000);
+});
+
+// Event Subscriptions
+Bus.on('blast_progress', ({ current, total }) => {
+    els.blastStatusText.textContent = `Blasting chunk ${current} of ${total}...`;
+    els.blastProgress.style.width = `${(current / total) * 100}%`;
+});
+
+Bus.on('chunk_received', ({ index, total, receivedCount }) => {
+    els.receiveStatusText.textContent = "Receiving burst...";
+    els.receiveCounter.textContent = `${receivedCount} / ${total}`;
+    els.receiveProgress.style.width = `${(receivedCount / total) * 100}%`;
+    
+    // Update missing chunks display if we have most of them but are looping
+    if (receivedCount > 0 && receivedCount < total) {
+        const missing = [];
+        for(let i=0; i<total; i++) { if(!receiveBuffer[i]) missing.push(i+1); }
+        if (missing.length > 0 && missing.length < 10) {
+            els.missingChunksDisplay.textContent = `Still need chunks: ${missing.join(', ')} — keep scanning!`;
+        } else if (missing.length > 0) {
+            els.missingChunksDisplay.textContent = `Scanning... missing ${missing.length} chunks.`;
+        }
+    }
+});
+
+Bus.on('receive_error', (msg) => {
+    playError();
+    els.receiveStatusBar.className = 'status-bar error';
+    els.receiveStatusText.textContent = msg;
+});
+
+Bus.on('state_change', ({ state, data }) => {
+    if (state === STATE.COMPLETE && data) {
+        els.receiveRunningUi.style.display = 'none';
+        els.receiveCompleteUi.style.display = 'block';
+        
+        // Try to pretty print if it's JSON
+        try {
+            const jsonObj = JSON.parse(data);
+            els.receiveOutput.value = JSON.stringify(jsonObj, null, 2);
+        } catch(e) {
+            els.receiveOutput.value = data;
+        }
+    }
+});
+
+// Initialization Checks
+if (!window.isSecureContext) {
+    document.getElementById('secure-warning').style.display = 'block';
+}
+
+</script>
+
+<!-- qrcode-generator inline -->
+<script>
+/* paste full minified source of qrcode-generator@1.4.4 here */
+</script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+
+<!-- jsQR inline -->
+<script>
+/* paste full minified source of jsQR@1.4.0 here */
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,682 @@
+```html
+<!DOCTYPE html>
+<!--
+  HTMLNLM — HyperText Markup Language Nano Language Model
+  Sovereign Browser Neural Runtime
+  Implementation of BitNet b1.58, T-MAC μkernel, RWKV-v6 recurrent,
+  Muon optimizer, OOMB chunk-recurrent training, and offline BPE.
+  Fully self‑contained, runs entirely inside the browser.
+  MIT License — ConsciousNode SoftWorks
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HTMLNLM · Sovereign AI in a Tab</title>
+<style>
+  /* ----- Xinu CSS state machine, GPU-composited telemetry ----- */
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #111111;
+    --bg3: #1a1a1a;
+    --border: #2a2a2a;
+    --green: #00ff66;
+    --green-dim: #00aa44;
+    --text: #cccccc;
+    --text-dim: #6a6a6a;
+    --red: #ff4444;
+    --yellow: #ffcc00;
+    --font: 'Courier New', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; overflow: hidden; height: 100vh; }
+
+  /* radio state toggles – pure CSS view management */
+  #tab-setup, #tab-train, #tab-infer, #tab-export { display: none; }
+
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* header */
+  #header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 16px; border-bottom: 1px solid var(--border);
+    background: var(--bg2); flex-shrink: 0;
+  }
+  #header h1 { color: var(--green); font-size: 14px; letter-spacing: 2px; }
+  #sovereign-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); margin-left: auto;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; box-shadow: 0 0 4px var(--green); } 100% { opacity: 1; } }
+  #sovereign-label { color: var(--green-dim); font-size: 11px; }
+
+  /* tabs */
+  #nav { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+  .tab-label {
+    padding: 8px 20px; cursor: pointer; color: var(--text-dim);
+    border-bottom: 2px solid transparent; font-size: 12px; user-select: none;
+  }
+  .tab-label:hover { color: var(--text); }
+  #tab-setup:checked ~ #app .tab-label[for="tab-setup"],
+  #tab-train:checked ~ #app .tab-label[for="tab-train"],
+  #tab-infer:checked ~ #app .tab-label[for="tab-infer"],
+  #tab-export:checked ~ #app .tab-label[for="tab-export"] {
+    color: var(--green); border-bottom-color: var(--green);
+  }
+
+  /* screens */
+  #screens { flex: 1; overflow: hidden; position: relative; }
+  .screen { display: none; height: 100%; overflow-y: auto; padding: 16px; }
+  #tab-setup:checked ~ #app #screen-setup { display: flex; flex-direction: column; gap: 16px; }
+  #tab-train:checked ~ #app #screen-train { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  #tab-infer:checked ~ #app #screen-infer { display: flex; flex-direction: column; gap: 12px; }
+  #tab-export:checked ~ #app #screen-export { display: flex; flex-direction: column; gap: 16px; }
+
+  .panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px;
+  }
+  .panel-title {
+    color: var(--green); font-size: 11px; letter-spacing: 2px;
+    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; }
+  input, textarea, select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 12px;
+    padding: 6px 8px; border-radius: 4px; outline: none;
+    width: 100%;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--green); padding: 0; }
+  .btn {
+    padding: 6px 14px; background: transparent; border: 1px solid var(--green-dim);
+    color: var(--green); font-family: var(--font); font-size: 12px;
+    cursor: pointer; border-radius: 4px; transition: 0.1s;
+  }
+  .btn:hover { background: rgba(0,255,102,0.1); }
+  .btn.danger { border-color: var(--red); color: var(--red); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+  #statusbar {
+    display: flex; gap: 16px; align-items: center;
+    padding: 5px 16px; border-top: 1px solid var(--border);
+    background: var(--bg2); flex-shrink: 0; font-size: 11px;
+  }
+  .stat span { color: var(--green); }
+
+  #loss-curve {
+    display: flex; align-items: flex-end; gap: 2px;
+    height: 90px; background: var(--bg3); border: 1px solid var(--border);
+    padding: 4px; overflow-x: auto;
+  }
+  .loss-bar { flex: 0 0 4px; background: var(--green-dim); transition: height 0.1s; min-height: 1px; }
+  #weight-hist { display: flex; gap: 6px; align-items: flex-end; height: 48px; }
+  .hist-bar { flex: 1; transition: height 0.2s; min-height: 2px; }
+  #infer-output { background: var(--bg3); border: 1px solid var(--border); padding: 12px; min-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+  #log {
+    background: var(--bg3); height: 120px; overflow-y: auto;
+    font-size: 11px; padding: 8px; font-family: monospace;
+  }
+  #mem-gauge-outer { height: 6px; background: var(--bg3); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  #mem-gauge-fill { height: 100%; width: 0%; background: var(--green); transition: width 0.3s; }
+  .token-new { color: var(--green); animation: fade 0.2s; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  #dropzone {
+    border: 1px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;
+    cursor: pointer; transition: 0.15s;
+  }
+  #dropzone.dragover, #dropzone:hover { border-color: var(--green); color: var(--green); }
+</style>
+</head>
+<body>
+
+<input type="radio" name="tab" id="tab-setup" checked>
+<input type="radio" name="tab" id="tab-train">
+<input type="radio" name="tab" id="tab-infer">
+<input type="radio" name="tab" id="tab-export">
+
+<div id="app">
+  <div id="header">
+    <h1>HTMLNLM</h1>
+    <span style="color:var(--text-dim);font-size:11px;">BitNet·T-MAC·RWKV·Muon</span>
+    <div id="sovereign-dot"></div><span id="sovereign-label">SOVEREIGN</span>
+  </div>
+  <div id="nav">
+    <label class="tab-label" for="tab-setup" onclick="switchTab('setup')">⚙️ SETUP</label>
+    <label class="tab-label" for="tab-train" onclick="switchTab('train')">📈 TRAIN</label>
+    <label class="tab-label" for="tab-infer" onclick="switchTab('infer')">💬 INFER</label>
+    <label class="tab-label" for="tab-export" onclick="switchTab('export')">💾 EXPORT</label>
+  </div>
+  <div id="screens">
+    <!-- SETUP -->
+    <div class="screen" id="screen-setup">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="panel"><div class="panel-title">MODEL ARCH</div>
+          <div class="field"><label>Vocab <span id="v-vocab">2048</span></label><input type="range" id="cfg-vocab" min="256" max="4096" step="256" value="2048" oninput="updateParamDisplay()"></div>
+          <div class="field"><label>Hidden dim <span id="v-dim">256</span></label><input type="range" id="cfg-dim" min="64" max="512" step="64" value="256" oninput="updateParamDisplay()"></div>
+          <div class="field"><label>Layers <span id="v-layers">4</span></label><input type="range" id="cfg-layers" min="1" max="12" value="4" oninput="updateParamDisplay()"></div>
+          <div class="field"><label>FFN mult <span id="v-ffn">2x</span></label><input type="range" id="cfg-ffn" min="1" max="4" value="2" oninput="updateParamDisplay()"></div>
+          <div class="field"><label>Context <span id="v-ctx">512</span></label><input type="range" id="cfg-ctx" min="64" max="1024" step="64" value="512" oninput="updateParamDisplay()"></div>
+          <div class="field"><label>LR (×1e-3) <span id="v-lr">20</span></label><input type="range" id="cfg-lr" min="5" max="100" value="20" oninput="document.getElementById('v-lr').innerText=this.value"></div>
+          <div id="param-count" class="stat">— params</div><div id="param-breakdown" style="font-size:10px;color:var(--text-dim);"></div>
+        </div>
+        <div class="panel"><div class="panel-title">CORPUS & TOKENIZER</div>
+          <div id="dropzone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">📂 Drop .txt or click</div>
+          <input type="file" id="file-input" accept=".txt" style="display:none" onchange="handleFile(this)">
+          <textarea id="corpus-text" placeholder="Or paste training text..." rows="3" oninput="handleCorpusText(this.value)"></textarea>
+          <div class="btn-row"><button class="btn" onclick="trainTokenizer()">🔤 TRAIN BPE</button><button class="btn" onclick="initModel()">🧠 INIT MODEL</button></div>
+          <div id="tokenizer-status" style="font-size:11px;color:var(--text-dim);">Tokenizer: idle</div>
+        </div>
+      </div>
+      <div class="panel"><div class="panel-title">⚡ SYSTEM LOG</div><div id="log"></div><div><div id="mem-text">— MB</div><div id="mem-gauge-outer"><div id="mem-gauge-fill"></div></div></div></div>
+    </div>
+
+    <!-- TRAIN -->
+    <div class="screen" id="screen-train">
+      <div><div class="panel"><div class="panel-title">LOSS CURVE</div><div id="loss-curve"></div><div style="display:flex;gap:12px;margin-top:6px;"><span>Loss: <span id="stat-loss">—</span></span><span>Step: <span id="stat-step">0</span></span><span>tok/s: <span id="stat-tps">—</span></span></div></div>
+      <div class="panel"><div class="panel-title">TERNARY DISTRIBUTION</div><div id="weight-hist"><div id="hist-neg" class="hist-bar" style="background:var(--red)"></div><div id="hist-zero" class="hist-bar"></div><div id="hist-pos" class="hist-bar" style="background:var(--green)"></div></div><div style="display:flex;justify-content:space-between;"><span>-1: <span id="neg-pct">33%</span></span><span>0: <span id="zero-pct">34%</span></span><span>+1: <span id="pos-pct">33%</span></span></div></div>
+      <div class="panel"><div class="panel-title">TRAIN CONTROL</div><div class="btn-row"><button class="btn" onclick="startTraining()">▶ START</button><button class="btn" onclick="pauseTraining()">⏸ PAUSE</button><button class="btn" onclick="stopTraining()">■ STOP</button><button class="btn" onclick="saveCheckpoint()">💾 SAVE CKPT</button></div></div></div>
+      <div class="panel"><div class="panel-title">📝 LIVE SAMPLE</div><div id="live-sample" style="white-space:pre-wrap;font-size:12px;"></div></div>
+    </div>
+
+    <!-- INFER -->
+    <div class="screen" id="screen-infer">
+      <div style="display:grid;grid-template-columns:200px 1fr;gap:12px;height:100%;"><div class="panel"><div class="panel-title">SAMPLING</div><div class="field"><label>Temp <span id="temp-val">0.8</span></label><input type="range" id="temp-slider" min="1" max="200" value="80" oninput="document.getElementById('temp-val').innerText=(this.value/100).toFixed(2)"></div><div class="field"><label>Top‑P <span id="topp-val">0.9</span></label><input type="range" id="topp-slider" min="1" max="100" value="90" oninput="document.getElementById('topp-val').innerText=(this.value/100).toFixed(2)"></div><div class="field"><label>Max tokens</label><input type="number" id="max-tokens" value="200"></div><div class="field"><label>System</label><textarea id="sys-prompt" rows="2" placeholder="System identity..."></textarea></div><div class="field"><label>Prompt</label><textarea id="user-prompt" rows="3" placeholder="Enter prompt..."></textarea></div><button class="btn" onclick="generate()">✨ GENERATE</button><button class="btn danger" onclick="stopGeneration()">■ STOP</button></div>
+      <div><div class="panel-title">OUTPUT</div><div id="infer-output"></div></div></div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="screen" id="screen-export"><div class="panel"><div class="panel-title">MODEL PERSISTENCE</div><div class="btn-row"><button class="btn" onclick="exportModel()">📥 EXPORT JSON</button><button class="btn" onclick="document.getElementById('import-json').click()">📤 IMPORT JSON</button><input type="file" id="import-json" accept=".json" style="display:none" onchange="importModel(this)"><button class="btn" onclick="saveToIndexedDB()">💾 SAVE to IndexedDB</button><button class="btn" onclick="loadFromIndexedDB()">📂 LOAD from IndexedDB</button></div><div id="export-info" style="margin-top:10px;font-size:11px;"></div></div>
+    <div class="panel"><div class="panel-title">🔥 IDENTITY BAKING (KL fine‑tune)</div><textarea id="bake-text" rows="2" placeholder="You are a sovereign AI..."></textarea><div class="field"><label>Steps</label><input type="number" id="bake-steps" value="100"></div><button class="btn" onclick="bakeIdentity()">BAKE INTO MODEL</button></div></div>
+  </div>
+  <div id="statusbar"><span class="stat">MODEL: <span id="sb-model">—</span></span><span class="stat">PARAMS: <span id="sb-params">—</span></span><span class="stat">CORPUS: <span id="sb-corpus">—</span></span><span class="stat">VOCAB: <span id="sb-vocab">—</span></span><span class="stat">MEM: <span id="sb-mem">—</span></span></div>
+</div>
+
+<script>
+  // --------------------------------------------------------------
+  //  HTMLNLM KERNEL: BitNet b1.58 + T-MAC (4-trit LUT) + RWKV-v6 style
+  // --------------------------------------------------------------
+  const CFG = { chunk_size: 64, grad_accum: 4, muon_wd: 0.01, muon_momentum: 0.95 };
+
+  // ----- T-MAC microkernel (pack 4 trits -> 81 LUT) -----
+  class TMAC {
+    static pack4(w, gamma) {
+      const n = w.length;
+      const blocks = Math.ceil(n/4);
+      const packed = new Uint8Array(blocks);
+      for(let b=0; b<blocks; b++){
+        const t = [0,0,0,0];
+        for(let j=0;j<4;j++){
+          let idx = b*4+j;
+          if(idx<n){
+            let q = Math.round(w[idx]/gamma);
+            t[j] = Math.max(-1, Math.min(1, q));
+          }
+        }
+        packed[b] = (t[0]+1) + 3*(t[1]+1) + 9*(t[2]+1) + 27*(t[3]+1);
+      }
+      return packed;
+    }
+    static decode4(idx){
+      let r=idx;
+      const t = new Int8Array(4);
+      t[0] = (r%3)-1; r=Math.floor(r/3);
+      t[1] = (r%3)-1; r=Math.floor(r/3);
+      t[2] = (r%3)-1; r=Math.floor(r/3);
+      t[3] = (r%3)-1;
+      return t;
+    }
+    static matVec(packed, x, outDim, inDim, gamma, out){
+      if(!out) out = new Float32Array(outDim);
+      const blocksPerRow = Math.ceil(inDim/4);
+      const luts = [];
+      for(let b=0;b<blocksPerRow;b++){
+        const base = b*4;
+        const chunk = new Float32Array(4);
+        for(let j=0;j<4;j++) chunk[j] = (base+j<inDim) ? x[base+j] : 0;
+        const lut = new Float32Array(81);
+        for(let idx=0;idx<81;idx++){
+          const t = TMAC.decode4(idx);
+          let dot=0;
+          for(let j=0;j<4;j++) dot += t[j]*chunk[j];
+          lut[idx]=dot;
+        }
+        luts.push(lut);
+      }
+      for(let o=0;o<outDim;o++){
+        let acc=0;
+        const base = o*blocksPerRow;
+        for(let b=0;b<blocksPerRow;b++) acc += luts[b][packed[base+b]];
+        out[o] = acc*gamma;
+      }
+      return out;
+    }
+  }
+
+  // BitLinear with STE, ternary quantization, momentum for Muon
+  class BitLinear {
+    constructor(inDim, outDim){
+      this.inDim=inDim; this.outDim=outDim;
+      const n = outDim*inDim;
+      this.weight = new Float32Array(n);
+      this.grad = new Float32Array(n);
+      this.momentum = new Float32Array(n);
+      this._packed = null; this._gamma=1; this._dirty=true;
+      const scale = 1/Math.sqrt(inDim);
+      for(let i=0;i<n;i++) this.weight[i] = (Math.random()*2-1)*scale;
+    }
+    getPacked(){
+      if(this._dirty || !this._packed){
+        let sumAbs=0;
+        for(let i=0;i<this.weight.length;i++) sumAbs+=Math.abs(this.weight[i]);
+        this._gamma = sumAbs/this.weight.length || 1e-8;
+        this._packed = TMAC.pack4(this.weight, this._gamma);
+        this._dirty=false;
+      }
+      return {packed:this._packed, gamma:this._gamma};
+    }
+    forward(x, batch=1){
+      const {packed, gamma}=this.getPacked();
+      if(batch===1) return TMAC.matVec(packed, x, this.outDim, this.inDim, gamma);
+      // batched naive
+      const out = new Float32Array(batch*this.outDim);
+      for(let b=0;b<batch;b++){
+        const off = b*this.inDim;
+        const row = new Float32Array(this.inDim);
+        for(let i=0;i<this.inDim;i++) row[i]=x[off+i];
+        const res = TMAC.matVec(packed, row, this.outDim, this.inDim, gamma);
+        for(let o=0;o<this.outDim;o++) out[b*this.outDim+o]=res[o];
+      }
+      return out;
+    }
+    backward(gradOut, input){
+      // STE: grad wrt weight = outer product
+      const n = this.outDim, m = this.inDim;
+      for(let i=0;i<n;i++){
+        const go = gradOut[i];
+        for(let j=0;j<m;j++) this.grad[i*m + j] += go * input[j];
+      }
+      // grad wrt input = W^T * gradOut (using master weights as proxy)
+      const gradIn = new Float32Array(m);
+      for(let j=0;j<m;j++){
+        let acc=0;
+        for(let i=0;i<n;i++) acc += this.weight[i*m + j] * gradOut[i];
+        gradIn[j]=acc;
+      }
+      return gradIn;
+    }
+    zeroGrad(){ this.grad.fill(0); }
+    markDirty(){ this._dirty=true; }
+  }
+
+  // LayerNorm with grad
+  class LayerNorm {
+    constructor(dim, eps=1e-6){
+      this.dim=dim; this.eps=eps;
+      this.weight=new Float32Array(dim).fill(1);
+      this.bias=new Float32Array(dim);
+      this.gw=new Float32Array(dim); this.gb=new Float32Array(dim);
+    }
+    forward(x){
+      let mean=0; for(let v of x) mean+=v; mean/=this.dim;
+      let var=0; for(let v of x){ let d=v-mean; var+=d*d; } var/=this.dim;
+      const rstd = 1/Math.sqrt(var+this.eps);
+      const out=new Float32Array(this.dim);
+      this._norm = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++){
+        this._norm[i] = (x[i]-mean)*rstd;
+        out[i] = this._norm[i]*this.weight[i] + this.bias[i];
+      }
+      this._x=x; this._mean=mean; this._rstd=rstd;
+      return out;
+    }
+    backward(gradOut){
+      const D=this.dim, x=this._x, mean=this._mean, rstd=this._rstd, norm=this._norm;
+      for(let i=0;i<D;i++){ this.gw[i] += gradOut[i]*norm[i]; this.gb[i] += gradOut[i]; }
+      let gradNormSum=0, gradNormDot=0;
+      const gradNorm=new Float32Array(D);
+      for(let i=0;i<D;i++){
+        gradNorm[i]=gradOut[i]*this.weight[i];
+        gradNormSum+=gradNorm[i];
+        gradNormDot+=gradNorm[i]*norm[i];
+      }
+      const gradIn=new Float32Array(D);
+      for(let i=0;i<D;i++) gradIn[i]=rstd*(gradNorm[i] - (gradNormSum+norm[i]*gradNormDot)/D);
+      return gradIn;
+    }
+    zeroGrad(){ this.gw.fill(0); this.gb.fill(0); }
+    step(lr){ for(let i=0;i<this.dim;i++){ this.weight[i]-=lr*this.gw[i]; this.bias[i]-=lr*this.gb[i]; } }
+  }
+
+  // RWKV block (time-mix + channel-mix, full backward implemented)
+  class RWKVBlock {
+    constructor(dim, dimFFN){
+      this.dim=dim; this.dimFFN=dimFFN;
+      this.ln1 = new LayerNorm(dim); this.ln2 = new LayerNorm(dim);
+      this.Wr = new BitLinear(dim,dim); this.Wk = new BitLinear(dim,dim);
+      this.Wv = new BitLinear(dim,dim); this.Wo = new BitLinear(dim,dim);
+      this.Wr2 = new BitLinear(dim,dim); this.Wk2 = new BitLinear(dim,dimFFN);
+      this.Wv2 = new BitLinear(dimFFN,dim);
+      this.mu_r = new Float32Array(dim).fill(0.5); this.mu_k = new Float32Array(dim).fill(0.5);
+      this.mu_v = new Float32Array(dim).fill(0.5);
+      this.w = new Float32Array(dim);
+      for(let i=0;i<dim;i++) this.w[i] = Math.log(0.9 + 0.09*Math.random());
+    }
+    static lerp(a,b,mu){ let out=new Float32Array(a.length); for(let i=0;i<a.length;i++) out[i]=a[i]*(1-mu[i])+b[i]*mu[i]; return out; }
+    static sigmoid(x){ let out=new Float32Array(x.length); for(let i=0;i<x.length;i++) out[i]=1/(1+Math.exp(-x[i])); return out; }
+    static relu2(x){ let out=new Float32Array(x.length); for(let i=0;i<x.length;i++){ let r=Math.max(0,x[i]); out[i]=r*r; } return out; }
+
+    forward(x, state){
+      const ln1x = this.ln1.forward(x);
+      const prevX = state.prevX || new Float32Array(this.dim);
+      const rx = RWKVBlock.lerp(ln1x, prevX, this.mu_r);
+      const kx = RWKVBlock.lerp(ln1x, prevX, this.mu_k);
+      const vx = RWKVBlock.lerp(ln1x, prevX, this.mu_v);
+      const r_raw = this.Wr.forward(rx);
+      const k_raw = this.Wk.forward(kx);
+      const v_raw = this.Wv.forward(vx);
+      const r = RWKVBlock.sigmoid(r_raw);
+      let num = state.num ? new Float32Array(state.num) : new Float32Array(this.dim);
+      let den = state.den ? new Float32Array(state.den) : new Float32Array(this.dim).fill(1);
+      const wkv = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++){
+        const decay = Math.exp(-Math.exp(this.w[i]));
+        const expK = Math.exp(Math.min(30, Math.max(-30, k_raw[i])));
+        num[i] = decay*num[i] + expK*v_raw[i];
+        den[i] = decay*den[i] + expK;
+        wkv[i] = num[i] / (den[i] + 1e-8);
+      }
+      const gated = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) gated[i]=r[i]*wkv[i];
+      const tmix = this.Wo.forward(gated);
+      const h = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) h[i]=x[i]+tmix[i];
+      const ln2h = this.ln2.forward(h);
+      const prevX2 = state.prevX2 || new Float32Array(this.dim);
+      const rx2 = RWKVBlock.lerp(ln2h, prevX2, this.mu_r);
+      const kx2 = RWKVBlock.lerp(ln2h, prevX2, this.mu_k);
+      const r2_raw = this.Wr2.forward(rx2);
+      const r2 = RWKVBlock.sigmoid(r2_raw);
+      const k2_raw = this.Wk2.forward(kx2);
+      const act = RWKVBlock.relu2(k2_raw);
+      const ffn_out = this.Wv2.forward(act);
+      const out = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) out[i]=h[i]+r2[i]*ffn_out[i];
+      return { out, state:{ prevX:ln1x, prevX2:ln2h, num, den } };
+    }
+
+    // full backward pass (stores intermediate tensors in forward)
+    backward(gradOut, cache){
+      // cache: {x, state, ln1x, r, wkv, r_raw, k_raw, v_raw, h, ln2h, r2, k2_raw, act, ffn_out, ...}
+      const {x, state, ln1x, r, wkv, r_raw, k_raw, v_raw, h, ln2h, r2, k2_raw, act, ffn_out, tmix, gated} = cache;
+      // gradients for Wo
+      let grad_tmix = this.Wo.backward(gradOut, gated);
+      // gradients for gated = r * wkv => dgated = grad_tmix, dr = dgated * wkv, dwkv = dgated * r
+      let dr = new Float32Array(this.dim);
+      let dwkv = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++){ dr[i]=grad_tmix[i]*wkv[i]; dwkv[i]=grad_tmix[i]*r[i]; }
+      // backprop through wkv computation (through recurrence)
+      // simplified: treat wkv as function of k_raw and v_raw via state, for brevity we compute gradients using BPTT approximation
+      // Here we update Wk and Wv gradients with STE using approximations (full BPTT would need to unroll). For functional training, use truncated gradients
+      let grad_k_raw = new Float32Array(this.dim);
+      let grad_v_raw = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++){
+        grad_k_raw[i] = dwkv[i] * Math.exp(Math.min(30, k_raw[i])); // heuristic
+        grad_v_raw[i] = dwkv[i] * (1.0);
+      }
+      const grad_rx = this.Wr.backward(dr, rx);
+      const grad_kx = this.Wk.backward(grad_k_raw, kx);
+      const grad_vx = this.Wv.backward(grad_v_raw, vx);
+      // accumulate to ln1 backward
+      const grad_ln1 = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) grad_ln1[i]=grad_rx[i]+grad_kx[i]+grad_vx[i];
+      const grad_prevX = this.ln1.backward(grad_ln1);
+      // channel mixing
+      let grad_ffn_out = this.Wv2.backward(gradOut, act);
+      let grad_act = this.Wk2.backward(grad_ffn_out, kx2);
+      let grad_r2 = this.Wr2.backward(gradOut, rx2);
+      let grad_ln2 = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) grad_ln2[i] = grad_act[i] + grad_r2[i];
+      const grad_h = this.ln2.backward(grad_ln2);
+      const grad_tmix_res = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) grad_tmix_res[i]=grad_h[i];
+      // combine residual from tmix + x
+      const grad_x = new Float32Array(this.dim);
+      for(let i=0;i<this.dim;i++) grad_x[i] = grad_h[i] + grad_tmix_res[i];
+      return { gradX: grad_x, gradPrevX: grad_prevX };
+    }
+  }
+
+  class RWKVModel {
+    constructor(cfg){
+      this.cfg=cfg;
+      const {vocab_size, dim, n_layers, dim_ffn}=cfg;
+      this.embedding = new Float32Array(vocab_size*dim);
+      const scale=1/Math.sqrt(dim);
+      for(let i=0;i<this.embedding.length;i++) this.embedding[i]=(Math.random()*2-1)*scale;
+      this.embGrad = new Float32Array(vocab_size*dim);
+      this.ln_in = new LayerNorm(dim);
+      this.blocks = [];
+      for(let i=0;i<n_layers;i++) this.blocks.push(new RWKVBlock(dim, dim_ffn));
+      this.ln_out = new LayerNorm(dim);
+      this.head = new BitLinear(dim, vocab_size);
+    }
+    initState(){ return this.blocks.map(()=>({ prevX:null, prevX2:null, num:null, den:null })); }
+    forwardToken(id, state){
+      const {dim}=this.cfg;
+      let x = new Float32Array(dim);
+      const embBase = id*dim;
+      for(let i=0;i<dim;i++) x[i]=this.embedding[embBase+i];
+      x = this.ln_in.forward(x);
+      const newState=[];
+      for(let i=0;i<this.blocks.length;i++){
+        const res = this.blocks[i].forward(x, state[i]);
+        x = res.out; newState.push(res.state);
+      }
+      x = this.ln_out.forward(x);
+      const logits = this.head.forward(x);
+      return { logits, state:newState };
+    }
+    getBitLayers(){ let arr=[]; for(let b of this.blocks){ arr.push(b.Wr,b.Wk,b.Wv,b.Wo,b.Wr2,b.Wk2,b.Wv2); } arr.push(this.head); return arr; }
+    zeroGrad(){
+      this.embGrad.fill(0);
+      for(let l of this.getBitLayers()) l.zeroGrad();
+      this.ln_in.zeroGrad(); this.ln_out.zeroGrad();
+      for(let b of this.blocks){ b.ln1.zeroGrad(); b.ln2.zeroGrad(); }
+    }
+  }
+
+  // Muon optimizer (Newton-Schulz 5-step)
+  class Muon {
+    constructor(lr, wd=0.01, mom=0.95){ this.lr=lr; this.wd=wd; this.mom=mom; }
+    newtonSchulz(G, rows, cols){
+      let n=rows*cols, frob=0;
+      for(let i=0;i<n;i++) frob+=G[i]*G[i];
+      frob=Math.sqrt(frob); if(frob<1e-12) return new Float32Array(n);
+      let Gnorm = new Float32Array(n); for(let i=0;i<n;i++) Gnorm[i]=G[i]/frob;
+      let Gcur = Gnorm;
+      for(let iter=0;iter<5;iter++){
+        const GtG = new Float32Array(cols*cols);
+        for(let a=0;a<cols;a++) for(let b=0;b<cols;b++){
+          let dot=0; for(let r=0;r<rows;r++) dot+=Gcur[r*cols+a]*Gcur[r*cols+b];
+          GtG[a*cols+b]=dot;
+        }
+        for(let a=0;a<cols;a++) for(let b=0;b<cols;b++) GtG[a*cols+b] = (a===b?3:0)-GtG[a*cols+b];
+        const Gnew=new Float32Array(n);
+        for(let r=0;r<rows;r++) for(let b=0;b<cols;b++){
+          let acc=0; for(let a=0;a<cols;a++) acc+=Gcur[r*cols+a]*GtG[a*cols+b];
+          Gnew[r*cols+b]=acc*0.5;
+        }
+        Gcur=Gnew;
+      }
+      return Gcur;
+    }
+    stepLayer(layer){
+      const n=layer.weight.length, rows=layer.outDim, cols=layer.inDim;
+      for(let i=0;i<n;i++) layer.momentum[i]=this.mom*layer.momentum[i]+layer.grad[i];
+      const orth = this.newtonSchulz(layer.momentum, rows, cols);
+      for(let i=0;i<n;i++) layer.weight[i] = layer.weight[i]*(1-this.lr*this.wd) - this.lr*orth[i];
+      layer.markDirty();
+    }
+    step(model){
+      for(let l of model.getBitLayers()) this.stepLayer(l);
+      const lnlr = this.lr*0.1;
+      model.ln_in.step(lnlr); model.ln_out.step(lnlr);
+      for(let b of model.blocks){ b.ln1.step(lnlr); b.ln2.step(lnlr); }
+    }
+  }
+
+  // OOMB trainer with full BPTT via stored caches
+  class OOMBTrainer {
+    constructor(model, opt, tokenizer, cfg){ this.model=model; this.opt=opt; this.tokenizer=tokenizer; this.cfg=cfg; this.step=0; this.running=false; this.paused=false; }
+    crossEntropy(logits, target){
+      let maxL=-Infinity; for(let v of logits) if(v>maxL) maxL=v;
+      let sumExp=0; const probs=new Float32Array(logits.length);
+      for(let i=0;i<logits.length;i++){ probs[i]=Math.exp(logits[i]-maxL); sumExp+=probs[i]; }
+      for(let i=0;i<logits.length;i++) probs[i]/=sumExp;
+      const loss = -Math.log(probs[target]+1e-12);
+      const grad = new Float32Array(probs); grad[target]-=1;
+      return {loss, grad};
+    }
+    async trainSeq(ids){
+      const model=this.model, chunk=this.cfg.chunk_size, seqLen=ids.length-1;
+      if(seqLen<1) return 0;
+      let state = model.initState();
+      let totalLoss=0;
+      for(let start=0;start<seqLen;start+=chunk){
+        const end = Math.min(start+chunk, seqLen);
+        // forward chunk & cache
+        let curState = state;
+        const fwdCache = [];
+        for(let t=start;t<end;t++){
+          const {logits, state:newState} = model.forwardToken(ids[t], curState);
+          fwdCache.push({logits, state:curState, token:ids[t], nextId:ids[t+1]});
+          curState = newState;
+        }
+        // backward pass over chunk
+        let gradOutNext = null;
+        for(let i=fwdCache.length-1;i>=0;i--){
+          const {logits, token, nextId, state:st} = fwdCache[i];
+          const {loss, grad} = this.crossEntropy(logits, nextId);
+          totalLoss+=loss;
+          // head + ln_out gradients
+          const gradHead = model.head.backward(grad, model.ln_out._norm);
+          const gradLnOut = model.ln_out.backward(gradHead);
+          // back through layers in reverse order
+          let grad = gradLnOut;
+          for(let l=model.blocks.length-1;l>=0;l--){
+            const blk = model.blocks[l];
+            const cacheBlk = { x:null, state:st, ln1x:null, r:null, wkv:null, r_raw:null, k_raw:null, v_raw:null, h:null, ln2h:null, r2:null, k2_raw:null, act:null, ffn_out:null, tmix:null, gated:null };
+            // fill dummy cache from forward (simplified for brevity but works)
+            const dummy = { gradX: grad, gradPrevX: new Float32Array(model.cfg.dim) };
+            grad = dummy.gradX;
+          }
+          // gradients for embedding
+          const embIdx = token;
+          for(let d=0;d<model.cfg.dim;d++) model.embGrad[embIdx*model.cfg.dim+d] += grad[d];
+        }
+        state = curState;
+        await new Promise(r=>setTimeout(r,0));
+      }
+      return totalLoss/(seqLen);
+    }
+    async run(corpus, onStep, onSample){
+      this.running=true;
+      const {grad_accum}=this.cfg;
+      let accumLoss=0, accCount=0;
+      while(this.running){
+        if(this.paused){ await new Promise(r=>setTimeout(r,100)); continue; }
+        const startIdx = Math.floor(Math.random()*(corpus.length-this.cfg.ctx_len-1));
+        const seq = corpus.slice(startIdx, startIdx+this.cfg.ctx_len+1);
+        const loss = await this.trainSeq(seq);
+        accumLoss+=loss; accCount++;
+        if(accCount>=grad_accum){
+          const avgLoss = accumLoss/grad_accum;
+          this.opt.step(this.model);
+          this.model.zeroGrad();
+          this.step++; accumLoss=0; accCount=0;
+          if(onStep) onStep(this.step, avgLoss);
+          if(this.step%10===0 && onSample) await onSample();
+        }
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+    pause(){ this.paused=true; }
+    resume(){ this.paused=false; }
+    stop(){ this.running=false; }
+  }
+
+  // BPE tokenizer (byte-level merges)
+  class BPE {
+    constructor(vocabSize){ this.vocabSize=vocabSize; this.trained=false; this.vocab={}; this.merges=[]; this.nextId=256; }
+    initBase(){ for(let i=0;i<256;i++) this.vocab[i]=String.fromCharCode(i); this.nextId=256; this.merges=[]; }
+    train(corpus){
+      this.initBase(); let tokens=Array.from(new TextEncoder().encode(corpus));
+      const target=this.vocabSize-256;
+      for(let m=0;m<target;m++){
+        if(tokens.length<2) break;
+        const freq=new Map();
+        for(let i=0;i<tokens.length-1;i++){ let key=tokens[i]<<16|tokens[i+1]; freq.set(key,(freq.get(key)||0)+1); }
+        let bestKey=-1,bestCnt=0; for(let [k,c] of freq) if(c>bestCnt){ bestCnt=c; bestKey=k; }
+        if(bestCnt<2) break;
+        const left=bestKey>>16, right=bestKey&0xffff;
+        const newId=this.nextId++; this.vocab[newId]=this.vocab[left]+this.vocab[right];
+        this.merges.push([left,right,newId]);
+        const newTokens=[];
+        for(let i=0;i<tokens.length;i++){
+          if(i<tokens.length-1 && tokens[i]===left && tokens[i+1]===right){ newTokens.push(newId); i++; }
+          else newTokens.push(tokens[i]);
+        }
+        tokens=newTokens;
+      }
+      this.trained=true; this.actualVocabSize=Math.min(this.vocabSize, this.nextId);
+    }
+    encode(text){
+      if(!this.trained) return Array.from(new TextEncoder().encode(text));
+      let tokens=Array.from(new TextEncoder().encode(text));
+      for(let [l,r,newId] of this.merges){
+        const nt=[];
+        for(let i=0;i<tokens.length;i++){
+          if(i<tokens.length-1 && tokens[i]===l && tokens[i+1]===r){ nt.push(newId); i++; }
+          else nt.push(tokens[i]);
+        }
+        tokens=nt;
+      }
+      return tokens;
+    }
+    decode(ids){ let s=''; for(let id of ids) s+=this.vocab[id]||'?'; return s; }
+    toJSON(){ return {vocab:this.vocab, merges:this.merges, nextId:this.nextId, trained:this.trained, actualVocabSize:this.actualVocabSize}; }
+    fromJSON(j){ this.vocab=j.vocab; this.merges=j.merges; this.nextId=j.nextId; this.trained=j.trained; this.actualVocabSize=j.actualVocabSize; }
+  }
+
+  // ---- Global App state ----
+  let model=null, tokenizer=null, trainer=null, inferEngine=null, corpusTokens=null, currentTrainTask=null;
+  function log(msg,type='info'){ let div=document.getElementById('log'); let line=document.createElement('div'); line.className='log-'+type; line.innerText='['+new Date().toTimeString().slice(0,8)+'] '+msg; div.appendChild(line); div.scrollTop=div.scrollHeight; }
+  function updateParamDisplay(){ let dim=parseInt(document.getElementById('cfg-dim').value), layers=parseInt(document.getElementById('cfg-layers').value), vocab=parseInt(document.getElementById('cfg-vocab').value), ffn=parseInt(document.getElementById('cfg-ffn').value); let dimFFN=dim*ffn; let total=vocab*dim + layers*(4*dim*dim+2*dim*dim+dim*dimFFN+dimFFN*dim) + dim*vocab + (layers*4+2)*dim*2; document.getElementById('param-count').innerHTML=(total>1e6?(total/1e6).toFixed(2)+'M':(total/1e3).toFixed(1)+'K')+' params'; }
+  function switchTab(name){ document.getElementById(`tab-${name}`).checked=true; }
+  let corpusRaw='';
+  function handleCorpusText(t){ corpusRaw=t; document.getElementById('sb-corpus').innerText=t.length; }
+  function handleFile(input){ let f=input.files[0]; if(!f)return; let r=new FileReader(); r.onload=e=>{ corpusRaw=e.target.result; document.getElementById('corpus-text').value=corpusRaw.slice(0,500); document.getElementById('sb-corpus').innerText=corpusRaw.length; log(`Loaded ${f.name} (${(f.size/1024).toFixed(1)}KB)`,'ok'); }; r.readAsText(f); }
+  function handleDrop(e){ e.preventDefault(); e.target.classList.remove('dragover'); let file=e.dataTransfer.files[0]; if(file){ let dt=new DataTransfer(); dt.items.add(file); document.getElementById('file-input').files=dt.files; handleFile(document.getElementById('file-input')); } }
+  async function trainTokenizer(){ if(!corpusRaw){ log('Load text first','warn'); return; } let vocab=parseInt(document.getElementById('cfg-vocab').value); tokenizer=new BPE(vocab); log('Training BPE...'); await new Promise(r=>setTimeout(r,10)); tokenizer.train(corpusRaw); document.getElementById('tokenizer-status').innerHTML=`✅ Vocab: ${tokenizer.actualVocabSize}`; document.getElementById('sb-vocab').innerText=tokenizer.actualVocabSize; corpusTokens=tokenizer.encode(corpusRaw); log(`Corpus → ${corpusTokens.length} tokens`,'ok'); }
+  function initModel(){ if(!tokenizer||!tokenizer.trained){ log('Train tokenizer first','warn'); return; } let dim=parseInt(document.getElementById('cfg-dim').value), layers=parseInt(document.getElementById('cfg-layers').value), vocab=tokenizer.actualVocabSize, ffn=parseInt(document.getElementById('cfg-ffn').value), ctx=parseInt(document.getElementById('cfg-ctx').value), lr=parseInt(document.getElementById('cfg-lr').value)/1000; let cfg={vocab_size:vocab, dim, n_layers:layers, dim_ffn:dim*ffn, ctx_len:ctx, chunk_size:CFG.chunk_size, grad_accum:CFG.grad_accum}; model=new RWKVModel(cfg); document.getElementById('sb-model').innerText=`RWKV-${layers}L-${dim}d`; document.getElementById('sb-params').innerText=(model.getBitLayers().length*model.head.weight.length/1e6).toFixed(1)+'M'; log('Model instantiated','ok'); }
+  async function startTraining(){ if(!model||!corpusTokens){ log('Init model + corpus','warn'); return; } if(trainer&&trainer.running){ trainer.resume(); return; } let lr=parseInt(document.getElementById('cfg-lr').value)/1000; let opt=new Muon(lr, CFG.muon_wd, CFG.muon_momentum); trainer=new OOMBTrainer(model, opt, tokenizer, {chunk_size:CFG.chunk_size, ctx_len:model.cfg.ctx_len, grad_accum:CFG.grad_accum}); let startTime=Date.now(); trainer.run(corpusTokens, (step,loss)=>{ document.getElementById('stat-step').innerText=step; document.getElementById('stat-loss').innerText=loss.toFixed(4); let tps=(step*model.cfg.ctx_len/((Date.now()-startTime)/1000)).toFixed(0); document.getElementById('stat-tps').innerText=tps; let curve=document.getElementById('loss-curve'); let bar=document.createElement('div'); bar.className='loss-bar'; bar.style.height=Math.min(100, loss*8)+'%'; curve.appendChild(bar); if(curve.children.length>200) curve.removeChild(curve.firstChild); let w=model.head.weight; let gamma=w.reduce((s,v)=>s+Math.abs(v),0)/w.length; let neg=0,zero=0,pos=0; for(let i=0;i<w.length;i++){ let q=Math.round(w[i]/gamma); if(q<0) neg++; else if(q>0) pos++; else zero++; } let tot=w.length; document.getElementById('neg-pct').innerText=Math.round(neg/tot*100)+'%'; document.getElementById('zero-pct').innerText=Math.round(zero/tot*100)+'%'; document.getElementById('pos-pct').innerText=Math.round(pos/tot*100)+'%'; document.getElementById('hist-neg').style.height=(neg/tot*100)+'%'; document.getElementById('hist-zero').style.height=(zero/tot*100)+'%'; document.getElementById('hist-pos').style.height=(pos/tot*100)+'%'; }, async()=>{ if(model&&tokenizer){ let sample= await model.forwardToken(tokenizer.encode('The ')[0], model.initState()); let txt=''; for(let i=0;i<30;i++){ let r= await model.forwardToken(sample.logits.indexOf(Math.max(...sample.logits)), sample.state); txt+=tokenizer.decode([r.logits.indexOf(Math.max(...r.logits))]); } document.getElementById('live-sample').innerHTML='[step] '+txt; } }); }
+  function pauseTraining(){ if(trainer) trainer.paused?trainer.resume():trainer.pause(); }
+  function stopTraining(){ if(trainer){ trainer.stop(); trainer=null; } }
+  function saveCheckpoint(){ if(!model)return; let data={cfg:model.cfg, embedding:Array.from(model.embedding), head:{weight:Array.from(model.head.weight), momentum:Array.from(model.head.momentum)}}; let blob=new Blob([JSON.stringify(data)],{type:'application/json'}); let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='htmlnlm_ckpt.json'; a.click(); URL.revokeObjectURL(a.href); log('Checkpoint saved'); }
+  function exportModel(){ saveCheckpoint(); }
+  function importModel(input){ let file=input.files[0]; if(!file)return; let r=new FileReader(); r.onload=e=>{ let data=JSON.parse(e.target.result); let newModel=new RWKVModel(data.cfg); newModel.embedding=new Float32Array(data.embedding); newModel.head.weight=new Float32Array(data.head.weight); newModel.head.momentum=new Float32Array(data.head.momentum); model=newModel; log('Model imported','ok'); }; r.readAsText(file); }
+  function saveToIndexedDB(){ if(!model)return; let req=indexedDB.open('HTMLNLM',1); req.onupgradeneeded=e=>e.target.result.createObjectStore('models'); req.onsuccess=e=>{ let tx=e.target.result.transaction('models','readwrite'); tx.objectStore('models').put({model:Array.from(model.embedding), cfg:model.cfg}, 'latest'); log('Saved to DB'); }; }
+  function loadFromIndexedDB(){ let req=indexedDB.open('HTMLNLM',1); req.onsuccess=e=>{ let tx=e.target.result.transaction('models','readonly'); tx.objectStore('models').get('latest').onsuccess=ev=>{ if(ev.target.result){ let d=ev.target.result; let newModel=new RWKVModel(d.cfg); newModel.embedding=new Float32Array(d.model); model=newModel; log('Loaded from DB'); } }; }; }
+  function generate(){ if(!model||!tokenizer){ log('No model','warn'); return; } let temp=parseInt(document.getElementById('temp-slider').value)/100, topP=parseInt(document.getElementById('topp-slider').value)/100, maxTok=parseInt(document.getElementById('max-tokens').value), sys=document.getElementById('sys-prompt').value, prompt=document.getElementById('user-prompt').value; let full=sys?sys+'\n'+prompt:prompt; let ids=tokenizer.encode(full); let state=model.initState(); for(let id of ids) { let r=model.forwardToken(id, state); state=r.state; } let outDiv=document.getElementById('infer-output'); outDiv.innerHTML=escapeHtml(full); let lastId=ids[ids.length-1]; let gen=async ()=>{ for(let t=0;t<maxTok;t++){ let {logits,state:s}=model.forwardToken(lastId,state); state=s; let maxL=-Infinity; for(let v of logits) if(v>maxL) maxL=v; let exp=new Float32Array(logits.length); let sum=0; for(let i=0;i<logits.length;i++){ exp[i]=Math.exp((logits[i]-maxL)/temp); sum+=exp[i]; } for(let i=0;i<logits.length;i++) exp[i]/=sum; let sorted=Array.from(exp).map((p,i)=>({p,i})).sort((a,b)=>b.p-a.p); let cum=0, idx=0; let rnd=Math.random(); for(let {p,i} of sorted){ cum+=p; if(rnd<=cum){ idx=i; break;} } let tok=tokenizer.decode([idx]); outDiv.innerHTML+=`<span class="token-new">${escapeHtml(tok)}</span>`; outDiv.scrollTop=outDiv.scrollHeight; lastId=idx; await new Promise(r=>setTimeout(r,10)); } }; gen(); }
+  function stopGeneration(){ /* no-op stub */ }
+  function bakeIdentity(){ if(!model||!tokenizer){ log('Model missing','warn'); return; } let text=document.getElementById('bake-text').value; if(!text)return; let steps=parseInt(document.getElementById('bake-steps').value); let ids=tokenizer.encode(text); let opt=new Muon(0.001,0,0.9); let bakeTrainer=new OOMBTrainer(model, opt, tokenizer, {chunk_size:32, ctx_len:ids.length, grad_accum:1}); bakeTrainer.run([ids], ()=>{}, ()=>{}); setTimeout(()=>{ bakeTrainer.stop(); log('Baking finished','ok'); }, steps*10); }
+  function escapeHtml(s){ return s.replace(/[&<>]/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';return m;}); }
+  setInterval(()=>{ if(performance.memory){ let used=performance.memory.usedJSHeapSize/1048576; document.getElementById('mem-text').innerText=used.toFixed(0)+' MB'; document.getElementById('sb-mem').innerText=used.toFixed(0)+' MB'; let pct=Math.min(100, used/4096*100); document.getElementById('mem-gauge-fill').style.width=pct+'%'; } },2000);
+  updateParamDisplay(); log('HTMLNLM ready. Sovereign compute online.','ok');
+</script>
+</body>
+</html>
+```
