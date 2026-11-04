@@ -73,7 +73,11 @@ Measured November 4, 2026 in a 2-core cloud container (Intel Xeon @ 2.8 GHz). Yo
 })();
 </script>
 ```
-Arrays live inside the wasm memory, so nothing is copied per call. For a single-file app, paste both scripts inline.
+Arrays live inside the wasm memory, so nothing is copied per call. For a single-file app, paste both scripts inline, **with a provenance line on top** so the copy can be traced when it ages:
+```js
+/* from The-Beginning/microwat: microwat.js 2.0.0 + kernels.js 0.2.0 (commit <hash>) */
+```
+Every inlined copy is a frozen snapshot. The line is how anyone later finds out which version a project carries.
 
 ## Where this could go
 - **LEARNS:** matvec is the forward pass, and the backward pass needs the transposed version (`Wᵀ · g`) plus an outer-product update. Those are the next three kernels.
